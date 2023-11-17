@@ -183,7 +183,7 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
         # Create the empty dataframe with columns and the corresponding types.
         new_columns = []
         for i in columns:
-            if i == 'mdate':
+            if i == annd:
                 new_columns.append(get_repo_column(table))
 
             elif i == 'key3' and rename_alt_event_key3(table)!='':
@@ -218,9 +218,10 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
         # data_sets[annd] = data_sets[annd].map(dict_map)
 
         data_sets = dd.merge(days, data_sets, how='inner', left_on = ['all_dates'], right_on=[annd])
+        
 
         if annd!='mdate':
-            data_sets = data_sets.rename(columns={'mdate':get_repo_column(table)})
+            data_sets = data_sets.rename(columns = {annd:get_repo_column(table)})
 
         if rename_alt_event_key3(table)!='':
             data_sets = data_sets.rename(columns={'key3':rename_alt_event_key3(table)})
@@ -235,6 +236,7 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
 
         # Fix the order of columns
         data_sets = data_sets[alt_dfs.columns]
+        
 
         return data_sets
 
@@ -247,7 +249,8 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
     # Submit jobs to the parallel cores
     multi_subsets = [dask.delayed(_get_data)(table, tickers[(i-1)*npartitions:i*npartitions], columns, start, end) for i in range(1, ticker_partitions)]
     data_sets = dd.from_delayed(multi_subsets)
-    data_sets = data_sets.drop_duplicates(subset=['coid', get_repo_column(table), annd], keep = 'last')
+    # data_sets = data_sets.drop_duplicates(subset=['coid', get_repo_column(table), annd], keep = 'last')
+    data_sets = data_sets.drop_duplicates(subset=['coid', get_repo_column(table)], keep = 'last')
 
     # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
     if data_sets.npartitions < npartitions:
@@ -268,7 +271,7 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
     npartitions = kwargs.get('npartitions', para.npartitions_local)
 
     # 自動補上 coid, mdate
-    columns += ['coid', 'mdate','key3','annd']
+    columns += ['coid', 'mdate','key3','annd', 'no']
     columns = list(set(columns))
 
     # get fin data
@@ -279,7 +282,7 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
                             paginate = True,
                             chinese_column_name=False,
                             mdate = {'gte':start,'lte':end},
-                            opts= {'columns':columns, 'sort':{'coid.asc', 'mdate.asc', 'key3.asc', 'annd.asc'}})
+                            opts= {'columns':columns, 'sort':{'coid.asc', 'mdate.asc', 'no.asc','key3.asc', 'annd.asc'}})
         
         new_columns = []
         for c in columns:
@@ -302,8 +305,8 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
         data_sets = data_sets.rename(columns=lower_columns)
 
         # get most recent announce date of the company
-        # fin_date = get_announce_date(tickers, start = start, end = end, fin_type = fin_type)
-        # data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'mdate', 'key3'])
+        fin_date = getMRAnnd_np(data_sets[['coid', 'key3','annd', 'mdate', 'no']])
+        data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3','annd', 'mdate', 'no'])
 
         # del fin_date
         # gc.collect()
@@ -323,7 +326,7 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
             data_sets = data_sets.loc[:,selected_columns]
 
         # Parallel fin_type (key3) to columns
-        fin_keys = ['coid', 'mdate', 'annd', 'sem', 'merg', 'curr', 'fin_ind']
+        fin_keys = ['coid', 'mdate', 'annd', 'no', 'sem', 'merg', 'curr', 'fin_ind']
         keys = [i for i in columns if i in fin_keys]
         data_sets = fin_pivot(data_sets, remain_keys=keys)
 
@@ -358,6 +361,33 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
 
     return data_sets
 
+# def getMRAnnd(data):
+#     # Keep the last row when there are multiple rows with the same keys
+#     # The last row represents the data with the greatest mdate
+#     # data = data.drop_duplicates(subset=['coid', 'key3','annd'], keep='last')
+#     data_dd = data.drop_duplicates(subset=['coid', 'mdate', 'key3', 'annd'], keep = 'last')
+#     data_dd = data_dd.sort_values(['coid', 'mdate', 'key3', 'annd'])
+#     data = data_dd.drop_duplicates(subset=['coid', 'mdate', 'key3'], keep = 'first') 
+#     check_no = data.groupby(['coid', 'mdate', 'key3'])['annd'].count().reset_index()
+#     print(sum(check_no['annd']>1) == 0)
+    
+#     del data_dd, check_no
+#     gc.collect
+
+#     return data
+
+def getMRAnnd_np(data):
+    data = parallize_annd_process(data)
+    # Keep the last row when there are multiple rows with the same keys
+    # The last row represents the data with the greatest mdate
+    # data = data.drop_duplicates(subset=['coid', 'key3','annd'], keep='last')
+    data['ver'] = data['mdate'].astype(str) + '-' + data['no']
+    data = data.groupby(['coid', 'key3','annd'], as_index=False).max()
+    data = data.groupby(['coid','key3']).apply(lambda x: np.fmax.accumulate(x, axis=0))
+    data = parallelize_ver_process(data)
+    data.drop(columns = 'ver')
+
+    return data
 
 def get_announce_date(tickers, **kwargs):
     start = kwargs.get('start', para.default_start)
@@ -401,7 +431,7 @@ def parallize_annd_process(data, annd = 'annd'):
     dict_map = {uni_dates[i]:result[i] for i in range(len(result))}
 
     data[annd] = data[annd].map(dict_map)
-    # print(data['annd'])
+    # print(data[annd])
     
     return data
 
@@ -516,46 +546,46 @@ def generate_multicalendars(tickers, **kwargs):
 
     return fin_calendar
 
-def generate_multicalendars_dask(tickers, **kwargs):
-    # Setting defualt value of the parameters
-    start = kwargs.get('start', para.default_start)
-    end = kwargs.get('end', para.default_end)
-    npartitions = kwargs.get('npartitions', para.npartitions_local)
+# def generate_multicalendars_dask(tickers, **kwargs):
+#     # Setting defualt value of the parameters
+#     start = kwargs.get('start', para.default_start)
+#     end = kwargs.get('end', para.default_end)
+#     npartitions = kwargs.get('npartitions', para.npartitions_local)
 
 
-    def get_daily_calendar(tickers:list):
-        def get_data(ticker):
-            cal = pd.date_range(start=start, end=end, freq='D')
-            coid = [str(ticker)]*len(cal)
-            return pd.DataFrame({'coid':coid, 'all_dates': cal})
+#     def get_daily_calendar(tickers:list):
+#         def get_data(ticker):
+#             cal = pd.date_range(start=start, end=end, freq='D')
+#             coid = [str(ticker)]*len(cal)
+#             return pd.DataFrame({'coid':coid, 'all_dates': cal})
         
-        # Multi-ticker method
-        if len(tickers) > 1:
-            data_sets = pd.DataFrame()
-            for ticker in tickers:
-                data = get_data(ticker = ticker)
-                data_sets = pd.concat([data_sets, data])
+#         # Multi-ticker method
+#         if len(tickers) > 1:
+#             data_sets = pd.DataFrame()
+#             for ticker in tickers:
+#                 data = get_data(ticker = ticker)
+#                 data_sets = pd.concat([data_sets, data])
                 
-        # Single ticker mehtod
-        else:
-            data_sets = get_data(ticker = tickers)
+#         # Single ticker mehtod
+#         else:
+#             data_sets = get_data(ticker = tickers)
 
-        return data_sets
+#         return data_sets
     
-    # Define the meta for the dataframe
-    meta = pd.DataFrame({'coid': pd.Series(dtype='object'), 'all_dates': pd.Series(dtype='datetime64[ns]')})
+#     # Define the meta for the dataframe
+#     meta = pd.DataFrame({'coid': pd.Series(dtype='object'), 'all_dates': pd.Series(dtype='datetime64[ns]')})
     
-    # Calculate the number of tickers in each partition. 
-    ticker_partitions = get_partition_group(tickers=tickers, npartitions=npartitions)
+#     # Calculate the number of tickers in each partition. 
+#     ticker_partitions = get_partition_group(tickers=tickers, npartitions=npartitions)
 
-    # Submit jobs to the parallel cores
-    fin_calendar = dd.from_delayed([dask.delayed(get_daily_calendar)(tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)], meta = meta)
+#     # Submit jobs to the parallel cores
+#     fin_calendar = dd.from_delayed([dask.delayed(get_daily_calendar)(tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)])
     
-    # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
-    if fin_calendar.npartitions < npartitions:
-        fin_calendar = fin_calendar.repartition(npartitions=npartitions)
+#     # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
+#     if fin_calendar.npartitions < npartitions:
+#         fin_calendar = fin_calendar.repartition(npartitions=npartitions)
 
-    return fin_calendar
+#     return fin_calendar
 
 def get_most_recent_date(data, sort_keys, subset, keep_mothod):
     # sort data order by mdate(accural date) and annd_s(announce date)
@@ -676,7 +706,7 @@ class TejDaskAPI:
         self.npartitions = npartitions
 
     @property
-    def get_fin_data(self):
+    def get_fin_data(self, table, ticker, columns, start, end , fin_type, npartitions):
         self.columns += ['coid', 'mdate', 'annd', 'no', 'key3']
         self.columns = list(set(self.columns))
         # def get_data(self):

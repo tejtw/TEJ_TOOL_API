@@ -975,5 +975,13 @@
   "r834_TTM": "float64",
   "shares_A": "float64",
   "shares_Q": "float64",
-  "shares_TTM": "float64"
+  "shares_TTM": "float64",
+  "mkt_bd_c": "object",
+  "mkt_bd_e": "object",
+  "main_ind_c": "object",
+  "main_ind_e": "object",
+  "sub_ind_c": "object",
+  "sub_ind_e": "object",
+  "chg_name": "object",
+  "prv_no": "float64"
 }
