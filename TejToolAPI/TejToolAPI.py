@@ -185,7 +185,7 @@ def triggers(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'],  i
     trading_calendar = get_trading_calendar(ticker, start = start, end = end, npartitions = npartitions)
 
     # If include_self_acc equals to 'N', then delete the fin_self_acc in the trigger_tables list
-    if include_self_acc =='N':
+    if include_self_acc != 'Y':
         trigger_tables = trigger_tables.loc[trigger_tables['TABLE_NAMES']!='fin_self_acc',:]
 
     for table_name in trigger_tables['TABLE_NAMES'].unique():
@@ -265,13 +265,13 @@ def get_trading_calendar(tickers, **kwargs):
             
     
     # Define the meta of the dataframe
-    meta = pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+    # meta = pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
 
     # Calculate the number of tickers in each partition. 
     ticker_partitions = dask_api.get_partition_group(tickers = tickers, npartitions= npartitions)
 
     # Submit jobs to the parallel cores
-    trading_calendar = dd.from_delayed([dask.delayed(get_data)(tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)], meta = meta)
+    trading_calendar = dd.from_delayed([dask.delayed(get_data)(tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)])
 
     # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
     if trading_calendar.npartitions < 12:
