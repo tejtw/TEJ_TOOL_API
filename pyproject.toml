@@ -16,7 +16,7 @@ maintainers = [
 classifiers = [
     'Development Status :: 4 - Beta',
     'Natural Language :: English',
-    Natural Language :: Chinese (Traditional),
+    'Natural Language :: Chinese (Traditional)',
     'Programming Language :: Python',
     'Topic :: Office/Business :: Financial :: Investment',
     'Topic :: Scientific/Engineering :: Information Analysis',
