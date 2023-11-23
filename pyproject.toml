@@ -57,7 +57,7 @@ where = ['TejToolAPI']
 
 
 [tool.setuptools_scm]
-write_to = "src/zipline/_version.py"
+write_to = "TejToolAPI/_version.py"
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.xlsx"]
