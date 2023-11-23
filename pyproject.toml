@@ -1,5 +1,5 @@
 [project]
-name = 'TejToolAPI'
+name = 'tej-tool-api'
 description = 'Package to fetch a large quantity of data from tejapi.'
 readme = 'README.md'
 dynamic = ["version"]
