@@ -1,0 +1,63 @@
+[project]
+name = 'TejToolAPI'
+description = 'Package to fetch a large quantity of data from tejapi.'
+readme = 'README.md'
+dynamic = ["version"]
+
+authors = [
+    { name = 'tej' },
+    { email = 'tej@tej.com.tw' }
+]
+maintainers = [
+    { name = 'tej api Development Team' },
+    { email = 'tej@tej.com.tw' }
+]
+
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Natural Language :: English',
+    Natural Language :: Chinese (Traditional),
+    'Programming Language :: Python',
+    'Topic :: Office/Business :: Financial :: Investment',
+    'Topic :: Scientific/Engineering :: Information Analysis',
+]
+
+
+requires-python = '>=3.8'
+dependencies = [
+    'dask >= 2022.4.1',
+    'pandas >= 1.2.5, <= 1.5.3',
+    'tejapi >= 0.1.27',
+    'xlrd >= 1.0.0',
+    'openpyxl',
+    'fastparquet <=0.8.3',
+]
+
+[project.urls]
+homepage = 'https://api.tej.com.tw'
+repository = 'https://github.com/tejtw/TEJ_TOOL_API'
+
+[build-system]
+requires = [
+    'setuptools>=42.0.0',
+    "setuptools_scm[toml]>=6.2",
+    'wheel>=0.36.0',
+    'oldest-supported-numpy; python_version>="3.8"',
+]
+
+build-backend = 'setuptools.build_meta'
+
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ['TejToolAPI']
+
+
+[tool.setuptools_scm]
+write_to = "src/zipline/_version.py"
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.xlsx"]
