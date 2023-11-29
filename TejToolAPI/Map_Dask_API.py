@@ -51,7 +51,11 @@ def get_fin_data(table, tickers, columns=[], **kwargs):
         if len(data_sets) < 1:
 
             return fix_col_df
-        
+        temp = data_sets[['coid', 'key3','annd', 'mdate', 'no']].copy()
+        fin_date = getMRAnnd_np(temp)
+        data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3','annd', 'mdate', 'no'])
+        # if 'ver' in data_sets.columns:
+        #     data_sets.drop(columns = 'ver')
 
         # parallel fin_type to columns 
         keys = ['coid', 'mdate', 'no', 'annd'] + [c  for c in columns if c in ['sem','fin_type', 'curr', 'fin_ind']]
@@ -67,6 +71,7 @@ def get_fin_data(table, tickers, columns=[], **kwargs):
 
         # Fixed the order of the columns
         data_sets = data_sets[fix_col_df.columns]
+        data_sets = parallize_annd_process(data_sets)
 
         return data_sets
     
@@ -305,7 +310,8 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
         data_sets = data_sets.rename(columns=lower_columns)
 
         # get most recent announce date of the company
-        fin_date = getMRAnnd_np(data_sets[['coid', 'key3','annd', 'mdate', 'no']])
+        temp = data_sets[['coid', 'key3','annd', 'mdate', 'no']].copy()
+        fin_date = getMRAnnd_np(temp)
         data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3','annd', 'mdate', 'no'])
 
         # del fin_date
@@ -340,6 +346,7 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
 
         # Fixed the order of the columns
         data_sets = data_sets[fix_col_df.columns]
+        data_sets = parallize_annd_process(data_sets)
         
         return data_sets
 
@@ -377,7 +384,7 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
 #     return data
 
 def getMRAnnd_np(data):
-    data = parallize_annd_process(data)
+    # data = parallize_annd_process(data)
     # Keep the last row when there are multiple rows with the same keys
     # The last row represents the data with the greatest mdate
     # data = data.drop_duplicates(subset=['coid', 'key3','annd'], keep='last')
@@ -385,7 +392,7 @@ def getMRAnnd_np(data):
     data = data.groupby(['coid', 'key3','annd'], as_index=False).max()
     data = data.groupby(['coid','key3']).apply(lambda x: np.fmax.accumulate(x, axis=0))
     data = parallelize_ver_process(data)
-    data.drop(columns = 'ver')
+    data = data.drop(columns = 'ver')
 
     return data
 
