@@ -66,6 +66,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     # Drop redundant columns of the merged table.
     if require_annd:
         history_data = history_data.drop(columns=[i for i in history_data.columns if i in para.drop_keys])
+        
     else:
         history_data = history_data.drop(columns=[i for i in history_data.columns if i in para.drop_keys+['fin_date', 'mon_sales_date', 'share_date']])
 
