@@ -33,6 +33,9 @@ jobs:
           pip install pytest
           pip install pandas
           pip install zipline-tej
+
+      - name: Access Secret
+        run: echo ${{ secrets.TQUANTLABTESTKEY }}
     
       - name: Run test
         run: pytest test/test_module.py
