@@ -19,7 +19,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - names: Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v2
 
       - name: Set up Python 3.11
