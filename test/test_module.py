@@ -1,7 +1,7 @@
 import os 
 # Api key has been place at github secret environment.
 # We do not have to enter api key when testing.
-os.environ['TEJAPI_KEY'] = os.getenv('TQUANTLABTESTKEY')
+os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
 
 from TejToolAPI import get_history_data
 from TejToolAPI import parameters as para

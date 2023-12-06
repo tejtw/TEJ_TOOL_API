@@ -38,6 +38,8 @@ jobs:
         run: echo ${{ secrets.TQUANTLABTESTKEY }}
     
       - name: Run test
+        env:
+          TQUANTLABTESTKEY: ${{ secrets.TQUANTLABTESTKEY }}
         run: pytest test/test_module.py
 
 #   deploy:
