@@ -10,8 +10,8 @@ import pandas as pd
 from zipline.data.data_portal import get_fundamentals
 
 def test_get_universe():
-        start = os.getenv('start_date')
-        end = os.getenv('end_date')
+        start = '2013-01-01' # os.getenv('start_date')
+        end = '2023-01-01' # os.getenv('end_date')
         pool = get_universe(start, end, mkt = ['TWSE', 'OTC'], stktp_e = 'Common Stock')
         return pool
 
