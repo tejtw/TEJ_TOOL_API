@@ -2,11 +2,27 @@ import os
 # Api key has been place at github secret environment.
 # We do not have to enter api key when testing.
 # os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
-from ..TejToolAPI import get_history_data
-from ..TejToolAPI import parameters as para
-from zipline.sources.TEJ_Api_Data import get_universe
+print('test_file:', os.getenv('TEJAPI_KEY'))
+
+import pytest
+
+def pytest_configure(config):
+    os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
+
+import sys
+sys.path.insert(0, os.path.pardir)
+# 导入 TejToolAPI 模块
+# import TejToolAPI
+from TejToolAPI import get_history_data
+from TejToolAPI import parameters as para
+
 import pandas as pd
 from zipline.data.data_portal import get_fundamentals
+from zipline.sources.TEJ_Api_Data import get_universe
+
+
+# from TejToolAPI import TejToolAPI
+
 
 def test_get_universe():
         start = '2013-01-01' # os.getenv('start_date')
