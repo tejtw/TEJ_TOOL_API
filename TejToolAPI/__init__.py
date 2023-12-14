@@ -6,6 +6,7 @@ except:
     pass
 
 tejapi.ApiConfig.api_key = os.environ.get('TEJAPI_KEY')
+print('In package:', tejapi.ApiConfig.api_key)
 tejapi.ApiConfig.ignoretz = True
 tejapi.ApiConfig.page_limit=10000
 
