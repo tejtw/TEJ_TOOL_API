@@ -3,15 +3,18 @@ import os
 # We do not have to enter api key when testing.
 # os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
 print('test_file:', os.getenv('TEJAPI_KEY'))
+print('test_file:', os.getenv('TEJAPI_BASE'))
 
-import pytest
+# import pytest
 
-def pytest_configure(config):
-    os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
+# def pytest_configure(config):
+#     os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
 
 import sys
+print(os.path.pardir)
 sys.path.insert(0, os.path.pardir)
-# 导入 TejToolAPI 模块
+print(sys.path)
+
 # import TejToolAPI
 from TejToolAPI import get_history_data
 from TejToolAPI import parameters as para
