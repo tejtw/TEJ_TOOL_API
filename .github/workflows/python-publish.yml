@@ -61,6 +61,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest
       #----------------------------------------------
+      #        activate virtual environment
+      #----------------------------------------------  
+      - name: Activate virtualenv
+        run: poetry shell
+      #----------------------------------------------
       #              run test suite
       #----------------------------------------------     
       - name: Run test
@@ -68,7 +73,8 @@ jobs:
           TEJAPI_KEY: ${{ secrets.TQUANTLABTESTKEY }}
           TEJAPI_BASE: 'https://api.tej.com.tw'
           
-        run: pytest test/test_module.py
+        run: |
+          poetry run pytest test/test_module.py
 
 #   deploy:
 #     runs-on: ubuntu-latest
