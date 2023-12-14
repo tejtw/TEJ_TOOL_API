@@ -37,6 +37,7 @@ tejapi = "^0.1.27"
 xlrd = "^1.0.0"
 openpyxl = {version = "*", optional = true}
 fastparquet = "<=0.8.3"
+pytest = {version = "*", optional = true}
 # requires-python = '>=3.8'
 # dependencies = [
 #     'dask >= 2022.4.1',
