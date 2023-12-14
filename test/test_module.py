@@ -2,9 +2,7 @@ import os
 # Api key has been place at github secret environment.
 # We do not have to enter api key when testing.
 # os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
-print('test_file:', os.getenv('TEJAPI_KEY'))
-print('test_file:', os.getenv('TEJAPI_BASE'))
-
+print('test_file:', os.environ)
 # import pytest
 
 # def pytest_configure(config):
