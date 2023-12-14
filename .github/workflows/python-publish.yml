@@ -63,8 +63,8 @@ jobs:
       #----------------------------------------------
       #        activate virtual environment
       #----------------------------------------------  
-      - name: Activate virtualenv
-        run: poetry shell
+      # - name: Activate virtualenv
+      #   run: poetry shell
       #----------------------------------------------
       #              run test suite
       #----------------------------------------------     
