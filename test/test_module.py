@@ -8,8 +8,10 @@ print(os.listdir(os.path.pardir))
 
 import sys
 sys.path.insert(0, os.path.abspath(os.curdir))
+if '.venv' in os.listdir(os.curdir):
+    sys.path.insert(0, os.path.join(os.path.abspath(os.curdir), '.venv\lib\python3.11\site-packages'))
+    
 print(sys.path)
-
 # import TejToolAPI
 from TejToolAPI import get_history_data
 from TejToolAPI import parameters as para
