@@ -13,7 +13,6 @@ on:
     types: [published]
 env:
   TEJAPI_KEY: ${{ secrets.TQUANTLABTESTKEY }}
-  ENV_TEST_KEY:  ${{ env.TQUANTLABTESTKEY }}
 
 permissions:
   contents: read
@@ -40,7 +39,6 @@ jobs:
         env:
           TEJAPI_KEY: ${{ secrets.TQUANTLABTESTKEY }}
           TEJAPI_BASE: 'https://api.tej.com.tw'
-          ENV_TEST_KEY:  ${{ env.TQUANTLABTESTKEY }}
           
         run: pytest test/test_module.py
 
