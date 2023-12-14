@@ -11,6 +11,9 @@ name: Upload Python Package
 on:
   release:
     types: [published]
+env:
+  TEJAPI_KEY: ${{ secrets.TQUANTLABTESTKEY }}
+  ENV_TEST_KEY:  ${{ env.TQUANTLABTESTKEY }}
 
 permissions:
   contents: read
@@ -32,15 +35,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest
           pip install pandas
-
-      - name: Access Secret
-        run: echo ${{ secrets.TQUANTLABTESTKEY }} ${{ env.TQUANTLABTESTKEY }}
-    
+          
       - name: Run test
         env:
           TEJAPI_KEY: ${{ secrets.TQUANTLABTESTKEY }}
           TEJAPI_BASE: 'https://api.tej.com.tw'
-          ENV_KEY: ${{ env.TQUANTLABTESTKEY }}
+          ENV_TEST_KEY:  ${{ env.TQUANTLABTESTKEY }}
+          
         run: pytest test/test_module.py
 
 #   deploy:
