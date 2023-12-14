@@ -35,7 +35,8 @@ dependencies = [
 
 [project.urls]
 homepage = 'https://api.tej.com.tw'
-repository = 'https://github.com/tejtw/TEJ_TOOL_API'
+# repository = 'https://github.com/tejtw/TEJ_TOOL_API'
+repository = 'https://github.com/tejtw/TEJ_TOOL_API/tree/testCICD_20231206'
 
 [build-system]
 requires = [
