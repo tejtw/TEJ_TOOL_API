@@ -14,8 +14,8 @@ sys.path.insert(0, os.path.pardir)
 print(sys.path)
 
 # import TejToolAPI
-from TejToolAPI import get_history_data
-from TejToolAPI import parameters as para
+from .TejToolAPI import get_history_data
+from .TejToolAPI import parameters as para
 
 import pandas as pd
 # from zipline.data.data_portal import get_fundamentals
