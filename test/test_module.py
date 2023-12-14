@@ -2,7 +2,7 @@ import os
 # Api key has been place at github secret environment.
 # We do not have to enter api key when testing.
 # os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
-# print('test_file:', os.environ)
+print(os.environ)
 print(os.listdir(os.curdir))
 print(os.listdir(os.path.pardir))
 
@@ -11,8 +11,8 @@ import sys
 # print(sys.path)
 
 # import TejToolAPI
-from .TejToolAPI import get_history_data
-from .TejToolAPI import parameters as para
+from TejToolAPI import get_history_data
+from TejToolAPI import parameters as para
 
 import pandas as pd
 # from zipline.data.data_portal import get_fundamentals
@@ -41,7 +41,7 @@ class UnitTest:
         self.end_adj = para.exc.annd_adjusted(self.end)
 
         # Test columns for fundamentals ingest.
-        self.ingest_column = os.getenv('ingest_column')
+        # self.ingest_column = os.getenv('ingest_column')
             
     def test_get_universe(self):
         start = '2013-01-01' # os.getenv('start_date')
