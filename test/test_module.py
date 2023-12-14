@@ -2,13 +2,13 @@ import os
 # Api key has been place at github secret environment.
 # We do not have to enter api key when testing.
 # os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
-print(os.environ)
+# print(os.environ)
 print(os.listdir(os.curdir))
 print(os.listdir(os.path.pardir))
 
 import sys
-# sys.path.insert(0, os.path.pardir)
-# print(sys.path)
+sys.path.insert(0, os.path.abspath(os.curdir))
+print(sys.path)
 
 # import TejToolAPI
 from TejToolAPI import get_history_data
