@@ -39,8 +39,9 @@ jobs:
     
       - name: Run test
         env:
-          TEJAPI_KEY: ${{ secrets.TQUANTLABTESTKEY }}
+          # TEJAPI_KEY: ${{ secrets.TQUANTLABTESTKEY }}
           TEJAPI_BASE: 'https://api.tej.com.tw'
+          TEJAPI_KEY: ${{ env.TQUANTLABTESTKEY }}
         run: pytest test/test_module.py
 
 #   deploy:
