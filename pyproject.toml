@@ -2,14 +2,20 @@
 name = 'tej-tool-api'
 description = 'Package to fetch a large quantity of data from tejapi.'
 readme = 'README.md'
+
 authors = [
     "tej <tej@tej.com.tw>",
 ]
+
 maintainers = [
     "tej api Development Team <tej@tej.com.tw>",
     "Leo Huang <jen_kuan@tej.com.tw>",
 ]
 
+# version control
+dynamic = ["version"]
+
+# project info
 homepage = 'https://api.tej.com.tw'
 repository = "https://github.com/tejtw/TEJ_TOOL_API/tree/testCICD_20231206"
 
