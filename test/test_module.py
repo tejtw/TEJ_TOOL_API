@@ -4,12 +4,10 @@ import os
 # os.environ['TEJAPI_KEY'] = os.environ.get('TQUANTLABTESTKEY')
 # print(os.environ)
 print(os.listdir(os.curdir))
-print(os.listdir(os.path.pardir))
-
 import sys
 sys.path.insert(0, os.path.abspath(os.curdir))
 if '.venv' in os.listdir(os.curdir):
-    sys.path.insert(0, os.path.join(os.path.abspath(os.curdir), '.venv\lib\python3.11\site-packages'))
+    sys.path.insert(0, os.path.join(os.path.abspath(os.curdir), '.venv', 'lib', 'python3.11','site-packages'))
     
 print(sys.path)
 # import TejToolAPI
