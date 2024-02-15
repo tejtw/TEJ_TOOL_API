@@ -38,7 +38,7 @@ pandas = ">= 1.2.5"
 tejapi = "^0.1.27"
 xlrd = "^1.0.0"
 openpyxl = {version = "*", optional = true}
-fastparquet = "{version = "*", optional = true}
+fastparquet = {version = "*", optional = true}
 
 [project.urls]
 homepage = 'https://api.tej.com.tw'
