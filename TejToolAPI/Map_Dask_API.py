@@ -389,8 +389,8 @@ def getMRAnnd_np(data):
     # The last row represents the data with the greatest mdate
     # data = data.drop_duplicates(subset=['coid', 'key3','annd'], keep='last')
     data['ver'] = data['mdate'].astype(str) + '-' + data['no']
-    data = data.groupby(['coid', 'key3','annd'], as_index=False).max()
-    data = data.groupby(['coid','key3']).apply(lambda x: np.fmax.accumulate(x, axis=0))
+    data = data.groupby(['coid', 'key3','annd'], as_index=False, group_keys = False).max()
+    data = data.groupby(['coid','key3'], group_keys = False).apply(lambda x: np.fmax.accumulate(x, axis=0))
     data = parallelize_ver_process(data)
     data = data.drop(columns = 'ver')
 
@@ -415,8 +415,8 @@ def get_announce_date(tickers, **kwargs):
     # The last row represents the data with the greatest mdate
     # data = data.drop_duplicates(subset=['coid', 'key3','annd'], keep='last')
     data['ver'] = data['mdate'].astype(str) + '-' + data['no']
-    data = data.groupby(['coid', 'key3','annd'], as_index=False).max()
-    data = data.groupby(['coid','key3']).apply(lambda x: np.fmax.accumulate(x, axis=0))
+    data = data.groupby(['coid', 'key3','annd'], as_index=False, group_keys = False).max()
+    data = data.groupby(['coid','key3'], group_keys = False).apply(lambda x: np.fmax.accumulate(x, axis=0))
     data = parallelize_ver_process(data)
     data.drop(columns = 'ver')
 
@@ -432,7 +432,7 @@ def parallize_annd_process(data, annd = 'annd'):
     # print(uni_dates)
 
     # 傳入 ExchangeCalendar 物件
-    result = vectorized_annd_adjusted(para.exc, uni_dates)
+    result = vectorized_annd_adjusted(para.exc, uni_dates, False)
 
     # Create a mapping dictionary
     dict_map = {uni_dates[i]:result[i] for i in range(len(result))}
