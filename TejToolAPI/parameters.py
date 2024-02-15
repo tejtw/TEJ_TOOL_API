@@ -5,11 +5,7 @@ import os
 from .exchange_calendar import ExchangeCalendar
 
 # Initialize exchange calendar
-try:
-    exc = ExchangeCalendar()
-except:
-    raise ValueError('請設定 TEJAPI_KEY ： os.environ["TEJAPI_KEY"] = "your_key"')
-# exc = ExchangeCalendar()
+exc = ExchangeCalendar()
 
 # current directory
 module_dir = os.path.dirname(os.path.abspath(__file__))

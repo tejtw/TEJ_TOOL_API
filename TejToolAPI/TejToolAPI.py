@@ -4,6 +4,7 @@ import pandas as pd
 import gc
 from . import parameters as para
 from . import Map_Dask_API as dask_api
+from .utils import get_api_key_info 
 import dask
 from .meta_types import Meta_Types 
                          
@@ -23,6 +24,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     transfer_to_chinese = kwargs.get('transfer_to_chinese', False)
     npartitions = kwargs.get('npartitions',  para.npartitions_local)
     require_annd = kwargs.get('require_annd', False)
+    show_progress = kwargs.get('show_progress', True)
 
     # Shift start date 180 days backward.
     start_dt = pd.to_datetime(start)
@@ -33,6 +35,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     # Triggers 
     all_tables = triggers(ticker = ticker, columns= columns, start= shift_start, end= end, fin_type= fin_type, include_self_acc= include_self_acc, npartitions = npartitions)
     
+
     # Combind fin_self_acc and fin_auditor
     try:
         # Concate fin_self_acc with fin_auditor
@@ -63,6 +66,8 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     # Consecutive merge.
     history_data = consecutive_merge(all_tables,  trigger_tables)
 
+
+
     # Drop redundant columns of the merged table.
     if require_annd:
         history_data = history_data.drop(columns=[i for i in history_data.columns if i in para.drop_keys])
@@ -82,6 +87,9 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
 
     # Apply forward value to fill the precending NaN.
     history_data = history_data.groupby('coid', group_keys = False).apply(dask_api.fillna_multicolumns)
+    # Drop suspend trading day
+    history_data = dd.merge(all_tables['coid_calendar'], history_data, on= ['coid','mdate'], how = 'left')
+    history_data = history_data.compute(meta = Meta_Types.all_meta)
 
     # Truncate resuly by user-setted start.
     history_data = history_data.loc[history_data.mdate >= org_start,:]
@@ -91,7 +99,8 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     lang_map = transfer_language_columns(history_data.columns, isChinese=transfer_to_chinese)
     history_data = history_data.rename(columns= lang_map)
     history_data = history_data.reset_index(drop=True)
-    
+    get_api_key_info(show_progress)
+
     return history_data
 
 def process_fin_data(all_tables, variable, tickers, start, end):
@@ -181,6 +190,11 @@ def triggers(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'],  i
     # Qualify the table triggered by the given `columns`
     trigger_tables = search_table(columns)
 
+    if 'stk_price' in trigger_tables:
+        coid_calendar = all_tables['stk_price'][['coid','mdate']]
+    else:
+        coid_calendar = get_stock_calendar(ticker, start = start, end = end, npartitions = npartitions)
+
     # Get trading calendar of all given tickers
     # if 'stk_price' not in trigger_tables['TABLE_NAMES'].unique():
     trading_calendar = get_trading_calendar(ticker, start = start, end = end, npartitions = npartitions)
@@ -218,18 +232,13 @@ def consecutive_merge(local_var, loop_array):
     data = local_var['trading_calendar']
 
     for i in range(len(loop_array)):
-        if loop_array[i] == 'APISTOCK':
-            # get coid attribution
-            data = dd.merge(data, local_var[loop_array[i]], on = 'coid', how = 'left', suffixes = ('','_surfeit'))
-            
-        else:
-            right_keys = table_keys.loc[table_keys['TABLE_NAMES']==loop_array[i], 'KEYS'].tolist()
-            # Merge tables by dask merge.
-            data = dd.merge(data, local_var[loop_array[i]], left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
+        right_keys = table_keys.loc[table_keys['TABLE_NAMES']==loop_array[i], 'KEYS'].tolist()
+        # Merge tables by dask merge.
+        data = dd.merge(data, local_var[loop_array[i]], left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
         
         # Clear the right table to release memory.
-        del local_var[loop_array[i]]
-        gc.collect()
+        # del local_var[loop_array[i]]
+        # gc.collect()
         
         # Drop surfeit columns.
         data = data.loc[:,~data.columns.str.contains('_surfeit')]
@@ -251,17 +260,68 @@ def get_trading_calendar(tickers, **kwargs):
     end = kwargs.get('end', para.default_end)
     npartitions = kwargs.get('npartitions',  para.npartitions_local)
 
-    def get_data(tickers):
-        # trading calendar
-        data = tejapi.fastget('TWN/APIPRCD',
-                        coid = tickers,
+    def get_index_trading_date(tickers):
+        index = tejapi.fastget('TWN/APIPRCD',
+                        coid = 'IX0001', # 台灣加權指數
                         paginate = True,
                         chinese_column_name=False,
                         mdate = {'gte':start,'lte':end},
-                        opts = {'columns':['coid','mdate'], 'sort':{'coid.asc', 'mdate.asc'}})
+                        opts = {'columns':['mdate'], 'sort':{'coid.asc', 'mdate.asc'}})
+        
+        mdate = index['mdate'].tolist()
+
+        data = pd.DataFrame({
+            'coid':[tick for tick in tickers for i in mdate],
+            'mdate':mdate*len(tickers)
+        })
         if len(data)<1:
             return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+    
+        return data
+
+    # def get_data(tickers):
+    #     # trading calendar
+    #     data = get_index_trading_date(tickers)
         
+    #     if len(data)<1:
+    #         return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+        
+    #     return data
+            
+    
+    # Define the meta of the dataframe
+    # meta = pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+
+    # Calculate the number of tickers in each partition. 
+    ticker_partitions = dask_api.get_partition_group(tickers = tickers, npartitions= npartitions)
+
+    # Submit jobs to the parallel cores
+    trading_calendar = dd.from_delayed([dask.delayed(get_index_trading_date)(tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)])
+
+    # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
+    if trading_calendar.npartitions < npartitions:
+        trading_calendar = trading_calendar.repartition(npartitions=npartitions)
+
+    return trading_calendar
+
+def get_stock_calendar(tickers, **kwargs):
+    # Setting default value of the corresponding parameters.
+    start = kwargs.get('start', para.default_start)
+    end = kwargs.get('end', para.default_end)
+    npartitions = kwargs.get('npartitions',  para.npartitions_local)
+
+    def get_data(tickers):
+        data = tejapi.fastget('TWN/APIPRCD',
+                        coid = tickers, 
+                        paginate = True,
+                        chinese_column_name=False,
+                        mdate = {'gte':start,'lte':end},
+                        opts = {'columns':['coid', 'mdate'], 'sort':{'coid.asc', 'mdate.asc'}})
+        
+
+        if len(data)<1:
+            return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+    
         return data
             
     
@@ -275,7 +335,7 @@ def get_trading_calendar(tickers, **kwargs):
     trading_calendar = dd.from_delayed([dask.delayed(get_data)(tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)])
 
     # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
-    if trading_calendar.npartitions < 12:
+    if trading_calendar.npartitions < npartitions:
         trading_calendar = trading_calendar.repartition(npartitions=npartitions)
 
     return trading_calendar
