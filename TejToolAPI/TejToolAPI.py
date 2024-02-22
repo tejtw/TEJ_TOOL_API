@@ -234,17 +234,14 @@ def consecutive_merge(local_var, loop_array):
     for i in range(len(loop_array)):
         right_keys = table_keys.loc[table_keys['TABLE_NAMES']==loop_array[i], 'KEYS'].tolist()
         # Merge tables by dask merge.
-        data = dd.merge(data, local_var[loop_array[i]], left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
         
-        # Clear the right table to release memory.
-        # del local_var[loop_array[i]]
-        # gc.collect()
+        temp = local_var[loop_array[i]]
+        if temp['mdate'].dtype != data['mdate'].dtype :
+            data['mdate'] = data['mdate'].astype(temp['mdate'].dtype)
+        data = dd.merge(data, temp, on = ['coid', 'mdate'] , how = 'left', suffixes = ('','_surfeit'))
         
         # Drop surfeit columns.
         data = data.loc[:,~data.columns.str.contains('_surfeit')]
-
-    # Ensure the type of mdate is appropriate.
-    data['mdate'] = dd.to_datetime(data['mdate'])
 
     return data
 
