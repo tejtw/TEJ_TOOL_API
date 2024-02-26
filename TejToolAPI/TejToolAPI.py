@@ -224,8 +224,8 @@ def consecutive_merge(local_var, loop_array):
         # Merge tables by dask merge.
         
         temp = local_var[loop_array[i]]
-        if ('fin_date' in temp.columns) and ('mdate' not in temp.columns) : # modified 20240223 by Han
-            temp['mdate'] = temp['fin_date'].copy()
+        if ('annd' in temp.columns) and ('mdate' not in temp.columns) : # modified 20240223 by Han
+            temp['mdate'] = temp['annd'].copy()
         if (temp['mdate'].dtype != data['mdate'].dtype) :
             data['mdate'] = data['mdate'].astype(temp['mdate'].dtype)
         
