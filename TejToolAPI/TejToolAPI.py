@@ -224,12 +224,12 @@ def consecutive_merge(local_var, loop_array):
         # Merge tables by dask merge.
         
         temp = local_var[loop_array[i]]
-        if ('annd' in temp.columns) and ('mdate' not in temp.columns) : # modified 20240223 by Han
-            temp['mdate'] = temp['annd'].copy()
-        if (temp['mdate'].dtype != data['mdate'].dtype) :
-            data['mdate'] = data['mdate'].astype(temp['mdate'].dtype)
+        # modified 20240226 by Han
+        d = right_keys[1] # d is date
+        if temp[d].dtype != data['mdate'].dtype :
+            data['mdate'] = data['mdate'].astype(temp[d].dtype)
         
-        data = dd.merge(data, temp, on = ['coid', 'mdate'] , how = 'left', suffixes = ('','_surfeit'))
+        data = dd.merge(data, local_var[loop_array[i]], left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
         # Drop surfeit columns.
         data = data.loc[:,~data.columns.str.contains('_surfeit')]
     data['mdate'] = data['mdate'].astype('datetime64[ns]')
