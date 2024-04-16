@@ -432,7 +432,7 @@ def parallize_annd_process(data, annd = 'annd'):
     # print(uni_dates)
 
     # 傳入 ExchangeCalendar 物件
-    result = vectorized_annd_adjusted(para.exc, uni_dates, False)
+    result = vectorized_annd_adjusted(para.exc, uni_dates, True)
 
     # Create a mapping dictionary
     dict_map = {uni_dates[i]:result[i] for i in range(len(result))}
