@@ -7,7 +7,8 @@ from . import Map_Dask_API as dask_api
 from .utils import get_api_key_info 
 import dask
 from .meta_types import Meta_Types 
-                         
+
+dask.config.set({'dataframe.convert-string': False})
 
 # 映射函數 (dask_version)
 funct_map = {
@@ -18,6 +19,27 @@ funct_map = {
 }
 
 def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'], include_self_acc:str = 'N', **kwargs):
+    """
+    ticker : list , 公司碼
+
+    columns : list , 欄位
+
+    fin_type : list , 累計,單季,移動四季(A,Q,TTM) (optional)
+
+    include_self_acc : ["Y","N"] , 是否包含公司自結 (optional)
+
+    start : str , 資料起始日 (YYYY-MM-DD) (optional)
+
+    end : str , 資料結束日 (YYYY-MM-DD) (optional)
+
+    npartitions : int , 每組資料數量 (optional)
+
+    require_annd : bool , 是否需要公告日欄位 (optional)
+
+    transfer_to_chinese : bool , 欄位是否轉換為中文 (optional)
+
+    show_progress : bool , 顯示流量狀況 (optional)
+    """
     # Setting default value of the corresponding parameters
     start = kwargs.get('start', para.default_start)
     end = kwargs.get('end', para.default_end)
@@ -87,6 +109,8 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     # Apply forward value to fill the precending NaN.
     history_data = history_data.groupby('coid', group_keys = False).apply(dask_api.fillna_multicolumns)
     # Drop suspend trading day
+    all_tables['coid_calendar']['mdate'] = all_tables['coid_calendar']['mdate'].astype(history_data['mdate'].dtype)
+    
     history_data = dd.merge(all_tables['coid_calendar'], history_data, on= ['coid','mdate'], how = 'left')
     history_data = history_data.compute(meta = Meta_Types.all_meta)
 
@@ -162,7 +186,13 @@ def search_columns(columns:list):
     index = para.transfer_language_table['COLUMNS'].isin(columns)
     tables = para.transfer_language_table.loc[index, :]
     return tables
-
+def show_columns( chinese : bool = True ) :
+    """
+    chinese : bool , default True , else English
+    """
+    if chinese :
+        return para.transfer_language_table['CHN_COLUMN_NAMES'].tolist()
+    return  para.transfer_language_table['ENG_COLUMN_NAMES'].tolist()
 def triggers(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'],  include_self_acc:str = 'N', **kwargs):
     # Setting default value of the corresponding parameters
     start = kwargs.get('start', para.default_start)
@@ -231,8 +261,12 @@ def consecutive_merge(local_var, loop_array):
         
         data = dd.merge(data, local_var[loop_array[i]], left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
         # Drop surfeit columns.
-        data = data.loc[:,~data.columns.str.contains('_surfeit')]
-    data['mdate'] = data['mdate'].astype('datetime64[ns]')
+        data = data.iloc[:,~data.columns.str.contains('_surfeit')]
+    pandas_main_version = pd.__version__.split('.')[0]
+    if pandas_main_version == '1' :
+        data['mdate'] = data['mdate'].astype('datetime64[ns]')
+    else :
+        data['mdate'] = data['mdate'].astype('datetime64[ms]')
     return data
 
 def keep_repo_date(data):
@@ -262,7 +296,11 @@ def get_trading_calendar(tickers, **kwargs):
             'mdate':mdate*len(tickers)
         })
         if len(data)<1:
-            return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+            pandas_main_version = pd.__version__.split('.')[0]
+            if pandas_main_version == '1' : 
+                return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+            else :
+                return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ms]')})
     
         return data
 
@@ -295,7 +333,11 @@ def get_stock_calendar(tickers, **kwargs):
         
 
         if len(data)<1:
-            return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+            pandas_main_version = pd.__version__.split('.')[0]
+            if pandas_main_version == '1' : 
+                return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+            else :
+                return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ms]')})
     
         return data
             

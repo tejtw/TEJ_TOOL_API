@@ -1,5 +1,6 @@
 import json
 import os
+import pandas as pd
 # current directory
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -25,6 +26,7 @@ module_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 class Meta_Types:
+    pandas_main_version = pd.__version__.split('.')[0]
     all_meta =  {
     'fin_date':'datetime64[ns]',
     'mon_sales_date':'datetime64[ns]',
@@ -35,17 +37,14 @@ class Meta_Types:
     "prv_term":"object",
     'event_no_float':'float64'
     }
-
-    # fin_meta = Fin_meta_types.meta_types
-    # stk_meta = Stk_meta_types.meta_types
-    # alt_event_meta = Alt_Event_meta_types.meta_types
-    
-    # all_meta.update(fin_meta)
-    # all_meta.update(stk_meta)
-    # all_meta.update(alt_event_meta)
     xlsx_path = os.path.join(module_dir,'tables','all_meta.json')
     with open(xlsx_path) as json_file:
         meta_types = json.load(json_file)
         json_file.close()
 
     all_meta.update(meta_types)
+    
+    if pandas_main_version != '1' :
+        for key ,value in all_meta.items() :
+            if value == 'datetime64[ns]' :
+                all_meta.update({key : 'datetime64[ms]'})

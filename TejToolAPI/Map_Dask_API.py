@@ -12,7 +12,8 @@ from .meta_types import (
     # Alt_Event_meta_types,
     Meta_Types
                          )
-
+import warnings
+warnings.filterwarnings('ignore')
 def get_fin_data(table, tickers, columns=[], **kwargs):
     start = kwargs.get('start', para.default_start)
     end = kwargs.get('end', para.default_end)
@@ -163,9 +164,6 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
     annd = get_event_column(table)
     # Fill coid, mdate and announce date(annd) to columns
     columns += ['coid','mdate', annd]
-    # If table contains 'key3', add key3 to columns
-    if 'key3' in tejapi.table_info(table)['columns'].keys():
-        columns += ['key3']
 
     columns = list(set(columns))
 
@@ -177,13 +175,33 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
         # get column of event date 
         annd = get_event_column(table)
         
-        # alternative data
-        data_sets = tejapi.fastget(table,
+        # monthly revenue
+        if table == 'TWN/APISALE1' :
+            columns += ['key3']
+            data_sets = tejapi.fastget(table,
                         coid = tickers,
                         paginate = True,
                         chinese_column_name=False,
                         mdate = {'gte':start,'lte':end},
-                        opts = {'columns':columns, 'sort':{'coid.asc', 'mdate.asc', f'{annd}.asc'}})
+                        opts = {'columns':columns, 'sort':{'coid.asc', f'{annd}.asc' , 'mdate.asc'}})
+            data_sets = data_sets.sort_values(by = ['coid' , 'annd_s' , 'mdate' , 'key3'] ,ascending = True)
+            dfgb = data_sets.groupby(['coid'])
+            while any([i for i in dfgb['mdate'].apply(lambda x: x.diff()).values if i < 0]) :
+                data_sets['diff'] = dfgb['mdate'].apply(lambda x: x.diff()).values
+                data_sets = data_sets.loc[data_sets['diff'] >= pd.Timedelta(0)]
+                dfgb = data_sets.groupby(['coid'])
+            del data_sets['key3']
+            if 'diff' in data_sets.columns :
+                del data_sets['diff'] 
+            columns.remove('key3')
+        else :
+            # alternative data
+            data_sets = tejapi.fastget(table,
+                            coid = tickers,
+                            paginate = True,
+                            chinese_column_name=False,
+                            mdate = {'gte':start,'lte':end},
+                            opts = {'columns':columns, 'sort':{'coid.asc', 'mdate.asc', f'{annd}.asc'}})
         
         # Create the empty dataframe with columns and the corresponding types.
         new_columns = []
@@ -238,7 +256,7 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
         if len(col_diff)>0:
             alt_df.update({i:data_sets[i].dtypes.name for i in list(col_diff)})
             alt_dfs = pd.DataFrame(alt_df)
-
+        
         # Fix the order of columns
         data_sets = data_sets[alt_dfs.columns]
         
@@ -539,7 +557,11 @@ def generate_multicalendars(tickers, **kwargs):
         return data_sets
 
     # Define the meta for the dataframe
-    meta = pd.DataFrame({'coid': pd.Series(dtype='object'), 'all_dates': pd.Series(dtype='datetime64[ns]')})
+    pandas_main_version = pd.__version__.split('.')[0]
+    if pandas_main_version == '1' :
+        meta = pd.DataFrame({'coid': pd.Series(dtype='object'), 'all_dates': pd.Series(dtype='datetime64[ns]')})
+    else :
+        meta = pd.DataFrame({'coid': pd.Series(dtype='object'), 'all_dates': pd.Series(dtype='datetime64[ms]')})
     
     # Calculate the number of tickers in each partition. 
     ticker_partitions = get_partition_group(tickers=tickers, npartitions=npartitions)
@@ -605,7 +627,7 @@ def get_most_recent_date(data, sort_keys, subset, keep_mothod):
 
 
 def fillna_multicolumns(df):
-    return df.fillna(method = 'ffill')
+    return df.ffill()
 
 def get_partition_group(tickers:list, npartitions):
     return (len(tickers)//npartitions) + 1 if len(tickers)%npartitions ==0 else (len(tickers)//npartitions) + 2
