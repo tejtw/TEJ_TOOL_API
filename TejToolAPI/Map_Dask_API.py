@@ -260,6 +260,7 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
         # Fix the order of columns
         data_sets = data_sets[alt_dfs.columns]
         
+        data_sets = data_sets.compute(meta = Meta_Types.all_meta)
 
         return data_sets
 
