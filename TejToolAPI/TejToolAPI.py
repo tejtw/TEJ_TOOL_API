@@ -208,12 +208,7 @@ def triggers(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'],  i
 
     # Qualify the table triggered by the given `columns`
     trigger_tables = search_table(columns)
-
-    if 'stk_price' in trigger_tables:
-        coid_calendar = all_tables['stk_price'][['coid','mdate']]
-    else:
-        coid_calendar = get_stock_calendar(ticker, start = start, end = end, npartitions = npartitions)
-
+    
     # Get trading calendar of all given tickers
     trading_calendar = get_trading_calendar(ticker, start = start, end = end, npartitions = npartitions)
 
@@ -232,6 +227,11 @@ def triggers(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'],  i
         else:
             exec(f'{table_name} = funct_map[api_code](api_table, ticker, selected_columns, start = start,  end = end, npartitions = npartitions)')
 
+    if 'stk_price' in trigger_tables['TABLE_NAMES'].unique().tolist():
+        locals()['stk_price'] = locals()['stk_price'].compute()
+        coid_calendar = locals()['stk_price'][['coid','mdate']]
+    else:
+        coid_calendar = get_stock_calendar(ticker, start = start, end = end, npartitions = npartitions).compute()
     return locals()
 
 def get_internal_code(fields:list):
@@ -280,15 +280,15 @@ def get_trading_calendar(tickers, **kwargs):
     start = kwargs.get('start', para.default_start)
     end = kwargs.get('end', para.default_end)
     npartitions = kwargs.get('npartitions',  para.npartitions_local)
-
-    def get_index_trading_date(tickers):
-        index = tejapi.fastget('TWN/APIPRCD',
+    index = tejapi.fastget('TWN/APIPRCD',
                         coid = 'IX0001', # 台灣加權指數
                         paginate = True,
                         chinese_column_name=False,
                         mdate = {'gte':start,'lte':end},
                         opts = {'columns':['mdate'], 'sort':{'coid.asc', 'mdate.asc'}})
-        
+    
+    def get_index_trading_date(index , tickers):
+
         mdate = index['mdate'].tolist()
 
         data = pd.DataFrame({
@@ -309,7 +309,7 @@ def get_trading_calendar(tickers, **kwargs):
     ticker_partitions = dask_api.get_partition_group(tickers = tickers, npartitions= npartitions)
 
     # Submit jobs to the parallel cores
-    trading_calendar = dd.from_delayed([dask.delayed(get_index_trading_date)(tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)])
+    trading_calendar = dd.from_delayed([dask.delayed(get_index_trading_date)(index , tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)])
 
     # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
     if trading_calendar.npartitions < npartitions:
