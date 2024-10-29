@@ -188,6 +188,7 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
             dfgb = data_sets.groupby(['coid'])
             while any([i for i in dfgb['mdate'].apply(lambda x: x.diff()).values if i < 0]) :
                 data_sets['diff'] = dfgb['mdate'].apply(lambda x: x.diff()).values
+                data_sets.fillna({'diff' : pd.Timedelta(days= 0 )} , inplace= True)
                 data_sets = data_sets.loc[data_sets['diff'] >= pd.Timedelta(0)]
                 dfgb = data_sets.groupby(['coid'])
             del data_sets['key3']
