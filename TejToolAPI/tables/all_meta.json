@@ -983,5 +983,11 @@
   "sub_ind_c": "object",
   "sub_ind_e": "object",
   "chg_name": "object",
-  "prv_no": "float64"
+  "prv_no": "float64",
+  "diff_rmk" : "object",
+  "ssadt_fg" : "object",
+  "q1shortd" : "datetime64[ns]",
+  "q2shortd" : "datetime64[ns]",
+  "q3shortd" : "datetime64[ns]",
+  "q4shortd" : "datetime64[ns]"
 }
