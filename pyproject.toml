@@ -24,15 +24,16 @@ classifiers = [
 
 license = { text = 'Apache-2.0'}
 
-[tool.poetry.dependencies]
-python = "^=3.8"
-dask = "2024.9.1"
-dask-expr = "1.1.15"
-pandas = "^= 1.2.5"
-tejapi = "^0.1.27"
-xlrd = "^1.0.0"
-openpyxl = {version = "*", optional = true}
-fastparquet = {version = "*", optional = true}
+requires-python = '>=3.8'
+dependencies = [
+    'dask = 2024.9.1',
+    'dask-expr = 1.1.15'
+    'pandas >= 2.0.0',
+    'tejapi >= 0.1.27',
+    'xlrd >= 1.0.0',
+    'openpyxl',
+    'fastparquet <=0.8.3',
+]
 
 [project.urls]
 homepage = 'https://api.tej.com.tw'
