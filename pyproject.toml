@@ -34,10 +34,10 @@ license = { text = 'Apache-2.0'}
 #     'openpyxl',
 #     'fastparquet <=0.8.3',
 # ]
-python = ">=3.8"
+python = "^=3.8"
 dask = "2024.9.1"
 dask-expr = "1.1.15"
-pandas = ">= 1.2.5"
+pandas = "^= 1.2.5"
 tejapi = "^0.1.27"
 xlrd = "^1.0.0"
 openpyxl = {version = "*", optional = true}
