@@ -33,7 +33,7 @@ dependencies = [
     'tejapi >= 0.1.27',
     'xlrd >= 1.0.0',
     'openpyxl',
-    'fastparquet <=0.8.3',
+    'fastparquet',
 ]
 
 [project.urls]
