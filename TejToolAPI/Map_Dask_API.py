@@ -186,7 +186,7 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
                         opts = {'columns':columns, 'sort':{'coid.asc', f'{annd}.asc' , 'mdate.asc'}})
             data_sets = data_sets.sort_values(by = ['coid' , 'annd_s' , 'mdate' , 'key3'] ,ascending = True)
             dfgb = data_sets.groupby(['coid'])
-            while any([i for i in dfgb['mdate'].apply(lambda x: x.diff()).values if i < 0]) :
+            while any([i for i in dfgb['mdate'].apply(lambda x: x.diff()).fillna(pd.Timedelta(days = 0)).values if i < 0]) :
                 data_sets['diff'] = dfgb['mdate'].apply(lambda x: x.diff()).values
                 data_sets.fillna({'diff' : pd.Timedelta(days= 0 )} , inplace= True)
                 data_sets = data_sets.loc[data_sets['diff'] >= pd.Timedelta(0)]
