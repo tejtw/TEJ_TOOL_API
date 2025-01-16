@@ -129,6 +129,8 @@ def process_fin_data(all_tables, variable, tickers, start, end):
     # transfer to daily basis
     days = para.exc.calendar
     days = days.rename(columns = {'zdate':'all_dates'})
+    if days['all_dates'].dtype != all_tables[variable]['annd'].dtype :
+        days['all_dates'] = days['all_dates'].astype(all_tables[variable]['annd'].dtype)
     all_tables[variable] = all_tables[variable].rename(columns = {'mdate':'fin_date'})
     all_tables[variable] = dd.merge(days, all_tables[variable], left_on=['all_dates'], right_on=['annd'], how='left')
 
