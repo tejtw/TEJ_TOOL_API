@@ -6,18 +6,16 @@ import dask.dataframe as dd
 import dask
 import gc
 from . import parameters as para
-from .meta_types import (
-    # Fin_meta_types,
-    # Stk_meta_types,
-    # Alt_Event_meta_types,
-    Meta_Types
-                         )
+from .meta_types import Meta_Types
 import warnings
+
 warnings.filterwarnings('ignore')
+
 def get_fin_data(table, tickers, columns=[], **kwargs):
     start = kwargs.get('start', para.default_start)
     end = kwargs.get('end', para.default_end)
     fin_type = kwargs.get('fin_type', ['A', 'Q', 'TTM'])
+    extend_fg = kwargs.get('extend_fg','N')
     # transfer_to_chinese = False
     npartitions = kwargs.get('npartitions', para.npartitions_local)
     
@@ -55,8 +53,6 @@ def get_fin_data(table, tickers, columns=[], **kwargs):
         temp = data_sets[['coid', 'key3','annd', 'mdate', 'no']].copy()
         fin_date = getMRAnnd_np(temp)
         data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3','annd', 'mdate', 'no'])
-        # if 'ver' in data_sets.columns:
-        #     data_sets.drop(columns = 'ver')
 
         # parallel fin_type to columns 
         keys = ['coid', 'mdate', 'no', 'annd'] + [c  for c in columns if c in ['sem','fin_type', 'curr', 'fin_ind']]
@@ -86,14 +82,12 @@ def get_fin_data(table, tickers, columns=[], **kwargs):
     # Submit jobs to the parallel cores
     multi_subsets = [dask.delayed(get_data)(table=table, tickers = tickers[(i-1)*npartitions:i*npartitions], columns = columns, start = start, end = end, fin_type = fin_type) for i in range(1, ticker_partitions)]
     data_sets = dd.from_delayed(multi_subsets)
-    data_sets = data_sets.drop_duplicates(subset=['coid', 'annd'], keep = 'last')
+    if extend_fg == "N" :
+        data_sets = data_sets.drop_duplicates(subset=['coid', 'annd'], keep = 'last')
     
     # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
     if data_sets.npartitions < npartitions:
         data_sets = data_sets.repartition(npartitions=npartitions)
-    
-    # if '2330' not in tickers:
-    #     data_sets = data_sets.loc[~(data_sets['coid']=='2330'),:]
     
     return data_sets
 
@@ -103,7 +97,7 @@ def get_trading_data(table, tickers, columns = [], **kwargs):
     start = kwargs.get('start', para.default_start)
     end = kwargs.get('end', para.default_end)
     npartitions = kwargs.get('npartitions',  para.npartitions_local)
-
+    extend_fg = kwargs.get('extend_fg','N')
     # 自動補上 coid, mdate
     columns += ['coid', 'mdate']
     columns = list(set(columns))
@@ -146,7 +140,8 @@ def get_trading_data(table, tickers, columns = [], **kwargs):
     # Submit jobs to the parallel cores
     multi_subsets = [dask.delayed(_get_data)(table, tickers[(i-1)*npartitions:i*npartitions], columns, start, end) for i in range(1, ticker_partitions)]
     data_sets = dd.from_delayed(multi_subsets)
-    data_sets = data_sets.drop_duplicates(subset=['coid', 'mdate'], keep = 'last')
+    if extend_fg == "N" :
+        data_sets = data_sets.drop_duplicates(subset=['coid', 'mdate'], keep = 'last')
 
     # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
     if data_sets.npartitions < npartitions:
@@ -159,7 +154,7 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
     end = kwargs.get('end', para.default_end)
     # transfer_to_chinese = False
     npartitions = kwargs.get('npartitions', para.npartitions_local)
-
+    extend_fg = kwargs.get('extend_fg','N')
     # get column of event date 
     annd = get_event_column(table)
     # Fill coid, mdate and announce date(annd) to columns
@@ -225,25 +220,8 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
         
         data_sets = parallize_annd_process(data_sets, annd= annd)
 
-        # # 創建一個向量化的函數
-        # vectorized_annd_adjusted = np.vectorize(annd_adjusted)
-
-        # # 所有不同的發布日
-        # uni_dates = pd.to_datetime(data_sets[annd].dropna().unique())
-        # # print(uni_dates)
-
-        # # 傳入 ExchangeCalendar 物件
-        # result = vectorized_annd_adjusted(para.exc, uni_dates)
-
-        # # Create a mapping dictionary
-        # dict_map = {uni_dates[i]:result[i] for i in range(len(result))}
-
-        # # Adjust non-trading announce date to next trading date.
-        # data_sets[annd] = data_sets[annd].map(dict_map)
-
         data_sets = dd.merge(days, data_sets, how='inner', left_on = ['all_dates'], right_on=[annd])
         
-
         if annd!='mdate':
             data_sets = data_sets.rename(columns = {annd:get_repo_column(table)})
 
@@ -261,7 +239,8 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
         # Fix the order of columns
         data_sets = data_sets[alt_dfs.columns]
         
-        data_sets = data_sets.compute(meta = Meta_Types.all_meta)
+        if not isinstance(data_sets , pd.DataFrame) :
+            data_sets = data_sets.compute(meta = Meta_Types.all_meta)
 
         return data_sets
 
@@ -275,7 +254,8 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
     multi_subsets = [dask.delayed(_get_data)(table, tickers[(i-1)*npartitions:i*npartitions], columns, start, end) for i in range(1, ticker_partitions)]
     data_sets = dd.from_delayed(multi_subsets)
     # data_sets = data_sets.drop_duplicates(subset=['coid', get_repo_column(table), annd], keep = 'last')
-    data_sets = data_sets.drop_duplicates(subset=['coid', get_repo_column(table)], keep = 'last')
+    if extend_fg == "N" :
+        data_sets = data_sets.drop_duplicates(subset=['coid', get_repo_column(table)], keep = 'last')
 
     # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
     if data_sets.npartitions < npartitions:
@@ -294,7 +274,7 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
     fin_type = kwargs.get('fin_type', ['A', 'Q', 'TTM'])
     # transfer_to_chinese = False
     npartitions = kwargs.get('npartitions', para.npartitions_local)
-
+    extend_fg = kwargs.get('extend_fg','N')
     # 自動補上 coid, mdate
     columns += ['coid', 'mdate','key3','annd', 'no']
     columns = list(set(columns))
@@ -380,7 +360,8 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
     # Submit jobs to the parallel cores
     multi_subsets = [dask.delayed(_get_data)(table=table, tickers = tickers[(i-1)*npartitions:i*npartitions], columns = columns, start = start, end = end, fin_type = fin_type) for i in range(1, ticker_partitions)]
     data_sets = dd.from_delayed(multi_subsets)
-    data_sets = data_sets.drop_duplicates(subset=['coid','annd'], keep = 'last')        
+    if extend_fg == "N" :
+        data_sets = data_sets.drop_duplicates(subset=['coid','annd'], keep = 'last')        
     
     # If ticker smaller than defaulted partitions, then transform it into defaulted partitions
     if data_sets.npartitions < npartitions:
@@ -388,26 +369,9 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
 
     return data_sets
 
-# def getMRAnnd(data):
-#     # Keep the last row when there are multiple rows with the same keys
-#     # The last row represents the data with the greatest mdate
-#     # data = data.drop_duplicates(subset=['coid', 'key3','annd'], keep='last')
-#     data_dd = data.drop_duplicates(subset=['coid', 'mdate', 'key3', 'annd'], keep = 'last')
-#     data_dd = data_dd.sort_values(['coid', 'mdate', 'key3', 'annd'])
-#     data = data_dd.drop_duplicates(subset=['coid', 'mdate', 'key3'], keep = 'first') 
-#     check_no = data.groupby(['coid', 'mdate', 'key3'])['annd'].count().reset_index()
-#     print(sum(check_no['annd']>1) == 0)
-    
-#     del data_dd, check_no
-#     gc.collect
-
-#     return data
 
 def getMRAnnd_np(data):
-    # data = parallize_annd_process(data)
-    # Keep the last row when there are multiple rows with the same keys
-    # The last row represents the data with the greatest mdate
-    # data = data.drop_duplicates(subset=['coid', 'key3','annd'], keep='last')
+
     data['ver'] = data['mdate'].astype(str) + '-' + data['no']
     data = data.groupby(['coid', 'key3','annd'], as_index=False, group_keys = False).max()
     data = data.groupby(['coid','key3'], group_keys = False).apply(lambda x: np.fmax.accumulate(x, axis=0))
