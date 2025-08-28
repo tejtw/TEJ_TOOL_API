@@ -7,6 +7,7 @@ from . import Map_Dask_API as dask_api
 from .utils import get_api_key_info 
 import dask
 from .meta_types import Meta_Types 
+import re
 
 dask.config.set({'dataframe.convert-string': False})
 
@@ -84,10 +85,9 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
 
     # Sort by OD
     trigger_tables.sort(key = lambda x: para.map_table.loc[para.map_table['TABLE_NAMES']==x, 'OD'].item())
-
+    
     # Consecutive merge.
     history_data = consecutive_merge(all_tables,  trigger_tables)
-
 
 
     # Drop redundant columns of the merged table.
@@ -96,9 +96,28 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
         
     else:
         history_data = history_data.drop(columns=[i for i in history_data.columns if i in para.drop_keys+['fin_date', 'mon_sales_date', 'share_date']])
-
-    # Transfer to pandas dataframe
+    
+    # Transfer to pandas dataframe   
     history_data = history_data.compute(meta = Meta_Types.all_meta)
+
+    fill_dict = dict(zip(all_tables['trigger_tables']['COLUMNS'] , all_tables['trigger_tables']['fill_fg']))
+
+    column_prefix = ['coid' , 'mdate']
+    for column in history_data.columns :
+        for valid_column in all_tables['trigger_tables']['COLUMNS'].tolist() :
+            if re.match(valid_column , column ) :
+                column_prefix.append(valid_column)
+                break
+    
+    status_column = [True if (column in ['coid' , 'mdate'] or fill_dict[column] == 'Y' ) else False for column in column_prefix ]
+
+    n_status_column = [True if (column in ['coid' , 'mdate'] or fill_dict[column] == 'N' ) else False for column in column_prefix ]
+    
+    event_data = history_data.loc[: , n_status_column]
+
+    history_data = history_data.loc[: , status_column]
+    
+    
 
     # Drop repeat rows from the table.
     history_data = history_data.drop_duplicates(subset=['coid', 'mdate'], keep='last')
@@ -107,7 +126,14 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     history_data = history_data.sort_values(['coid', 'mdate']).reset_index(drop=True)
 
     # Apply forward value to fill the precending NaN.
+    
     history_data = history_data.groupby('coid', group_keys = False).apply(dask_api.fillna_multicolumns)
+    
+    # merge back evnet-type data, which does not need ffill.
+    history_data = dd.merge(history_data, event_data, on= ['coid','mdate'], how = 'left')
+
+    history_data = history_data.compute(meta = Meta_Types.all_meta)
+
     # Drop suspend trading day
     all_tables['coid_calendar']['mdate'] = all_tables['coid_calendar']['mdate'].astype(history_data['mdate'].dtype)
     
@@ -118,6 +144,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     history_data = history_data.loc[history_data.mdate >= pd.Timestamp(org_start),:]
 
     # Transfer columns to abbreviation text.
+    
     lang_map = transfer_language_columns(history_data.columns, isChinese=transfer_to_chinese)
     history_data = history_data.rename(columns= lang_map)
     history_data = history_data.reset_index(drop=True)
@@ -157,9 +184,8 @@ def transfer_language_columns(columns, isChinese = False):
     
     mapping = {}
     for col in columns:
-        # Remove  _A, _Q, _TTM
-        check_fin_type = [col.__contains__('_A'), col.__contains__('_Q'), col.__contains__('_TTM')]
-        if any(check_fin_type):
+        # Remove  _A, _Q, _TTM , \d+
+        if ( re.search('_A$|_Q$|_TTM$|_\d+$' , col) ) :
             col_stripped = col.split('_')[:-1]
             fin_type = '_' + col.split('_')[-1]
             # If the variables contain '_', then join '_' into the variables.
@@ -188,6 +214,7 @@ def search_columns(columns:list):
     index = para.transfer_language_table['COLUMNS'].isin(columns)
     tables = para.transfer_language_table.loc[index, :]
     return tables
+
 def show_columns( chinese : bool = True ) :
     """
     chinese : bool , default True , else English
@@ -195,6 +222,28 @@ def show_columns( chinese : bool = True ) :
     if chinese :
         return para.transfer_language_table['CHN_COLUMN_NAMES'].tolist()
     return  para.transfer_language_table['ENG_COLUMN_NAMES'].tolist()
+
+def extend_columns(data : dd.DataFrame) :
+    """
+    依據 fin_invest_tables 中的 EXTEND_FG 進行欄位擴增
+    """
+    column_names = data.columns.tolist()
+    x = data.groupby(['coid' ,'mdate','all_dates']).agg(list).compute().reset_index()
+    
+    data_list = [x[['coid','mdate','all_dates']]]
+    for column in column_names :
+        if column in ['coid','mdate','all_dates'] :
+            continue
+        temp = x[column].apply(pd.Series)
+        temp.columns = temp.columns+1
+        temp = temp.add_prefix(f'{column}_')
+        data_list.append(temp)
+
+    result = dd.concat(data_list , axis =1)
+    
+
+    return result
+
 def triggers(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'],  include_self_acc:str = 'N', **kwargs):
     # Setting default value of the corresponding parameters
     start = kwargs.get('start', para.default_start)
@@ -217,17 +266,20 @@ def triggers(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'],  i
     # If include_self_acc equals to 'N', then delete the fin_self_acc in the trigger_tables list
     if include_self_acc != 'Y':
         trigger_tables = trigger_tables.loc[trigger_tables['TABLE_NAMES']!='fin_self_acc',:]
-
+    
     for table_name in trigger_tables['TABLE_NAMES'].unique():
         selected_columns = trigger_tables.loc[trigger_tables['TABLE_NAMES']==table_name, 'COLUMNS'].tolist()
+        
         api_code = para.table_API.loc[para.table_API['TABLE_NAMES']==table_name, 'API_CODE'].item()
         api_table = para.fin_invest_tables.loc[para.fin_invest_tables['TABLE_NAMES']==table_name,'API_TABLE'].item()
-
+        extend_fg = para.fin_invest_tables.loc[para.fin_invest_tables['TABLE_NAMES']==table_name,'EXTEND_FG'].item()
         if api_code == 'A0002' or api_code == 'A0004':
-            exec(f'{table_name} = funct_map[api_code](api_table, ticker, selected_columns, start = start,  end = end, fin_type = fin_type, npartitions = npartitions)')
+            exec(f'{table_name} = funct_map[api_code](api_table, ticker, selected_columns, start = start,  end = end, fin_type = fin_type, npartitions = npartitions , extend_fg = extend_fg )')
         
         else:
-            exec(f'{table_name} = funct_map[api_code](api_table, ticker, selected_columns, start = start,  end = end, npartitions = npartitions)')
+            exec(f'{table_name} = funct_map[api_code](api_table, ticker, selected_columns, start = start,  end = end, npartitions = npartitions , extend_fg = extend_fg)')
+        if (extend_fg == 'Y') :
+            locals()[f'{table_name}'] = extend_columns(locals()[f'{table_name}'])
 
     if 'stk_price' in trigger_tables['TABLE_NAMES'].unique().tolist():
         locals()['stk_price'] = locals()['stk_price'].compute()
@@ -245,12 +297,11 @@ def get_internal_code(fields:list):
     return columns
 
 def consecutive_merge(local_var, loop_array):
-    #
     table_keys = para.map_table.merge(para.merge_keys)
 
     # tables 兩兩合併
     data = local_var['trading_calendar']
-
+    
     for i in range(len(loop_array)):
         right_keys = table_keys.loc[table_keys['TABLE_NAMES']==loop_array[i], 'KEYS'].tolist()
         # Merge tables by dask merge.
@@ -260,9 +311,10 @@ def consecutive_merge(local_var, loop_array):
         d = right_keys[1] # d is date
         if temp[d].dtype != data['mdate'].dtype :
             data['mdate'] = data['mdate'].astype(temp[d].dtype)
-        
+
         data = dd.merge(data, local_var[loop_array[i]], left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
         # Drop surfeit columns.
+
         data = data.iloc[:,~data.columns.str.contains('_surfeit')]
     pandas_main_version = pd.__version__.split('.')[0]
     if pandas_main_version == '1' :

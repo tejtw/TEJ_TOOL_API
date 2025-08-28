@@ -34,6 +34,7 @@ dependencies = [
     'xlrd >= 1.0.0',
     'openpyxl',
     'fastparquet',
+    'pyarrow'
 ]
 
 [project.urls]
