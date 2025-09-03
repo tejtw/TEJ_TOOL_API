@@ -172,7 +172,8 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
         
         # monthly revenue
         if table == 'TWN/APISALE1' :
-            columns += ['key3']
+            if 'key3' not in columns :
+                columns += ['key3']
             data_sets = tejapi.fastget(table,
                         coid = tickers,
                         paginate = True,
@@ -189,7 +190,8 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
             del data_sets['key3']
             if 'diff' in data_sets.columns :
                 del data_sets['diff'] 
-            columns.remove('key3')
+            if 'key3' in columns :
+                columns.remove('key3')
         else :
             # alternative data
             data_sets = tejapi.fastget(table,
@@ -716,3 +718,4 @@ class TejDaskAPI:
         
         return datasets
         
+
