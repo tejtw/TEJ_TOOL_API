@@ -9,6 +9,10 @@ from . import parameters as para
 from .meta_types import Meta_Types
 import warnings
 
+global pandas_main_version
+
+pandas_main_version = pd.__version__.split('.')[0]
+
 warnings.filterwarnings('ignore')
 
 def get_fin_data(table, tickers, columns=[], **kwargs):
@@ -51,6 +55,8 @@ def get_fin_data(table, tickers, columns=[], **kwargs):
 
             return fix_col_df
         temp = data_sets[['coid', 'key3','annd', 'mdate', 'no']].copy()
+
+
         fin_date = getMRAnnd_np(temp)
         data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3','annd', 'mdate', 'no'])
 
@@ -302,21 +308,19 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
         lower_new_columns = {i:i.lower() for i in new_columns}
         fix_col_dict = {i:pd.Series(dtype=Meta_Types.all_meta[i]) for i in lower_new_columns}
         fix_col_df = pd.DataFrame(fix_col_dict)
-
+        
         if len(data_sets) < 1:
             return fix_col_df
         
         # modify the name of the columns from upper case to lower case.
         lower_columns = {i:i.lower() for i in data_sets.columns}
         data_sets = data_sets.rename(columns=lower_columns)
-
+        
         # get most recent announce date of the company
         temp = data_sets[['coid', 'key3','annd', 'mdate', 'no']].copy()
         fin_date = getMRAnnd_np(temp)
         data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3','annd', 'mdate', 'no'])
 
-        # del fin_date
-        # gc.collect()
         
         # Select columns
         try:
@@ -336,7 +340,7 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
         fin_keys = ['coid', 'mdate', 'annd', 'no', 'sem', 'merg', 'curr', 'fin_ind']
         keys = [i for i in columns if i in fin_keys]
         data_sets = fin_pivot(data_sets, remain_keys=keys)
-
+        
         # Ensure there is no difference between data_sets and alt_dfs.
         col_diff = set(data_sets.columns).difference(set(fix_col_df.columns))
 
@@ -347,6 +351,7 @@ def get_fin_auditor(table, tickers, columns=[], **kwargs):
 
         # Fixed the order of the columns
         data_sets = data_sets[fix_col_df.columns]
+        
         data_sets = parallize_annd_process(data_sets)
         
         return data_sets
@@ -378,7 +383,12 @@ def getMRAnnd_np(data):
     data = data.groupby(['coid','key3'], group_keys = False).apply(lambda x: np.fmax.accumulate(x, axis=0))
     data = parallelize_ver_process(data)
     data = data.drop(columns = 'ver')
-
+    if pandas_main_version != 1 :
+        data['mdate'] = data['mdate'].astype('datetime64[ms]')
+        data['annd'] = data['annd'].astype('datetime64[ms]')
+    else :
+        data['mdate'] = data['mdate'].astype('datetime64[ns]')
+        data['annd'] = data['annd'].astype('datetime64[ns]')
     return data
 
 def get_announce_date(tickers, **kwargs):
@@ -423,8 +433,10 @@ def parallize_annd_process(data, annd = 'annd'):
     dict_map = {uni_dates[i]:result[i] for i in range(len(result))}
 
     data[annd] = data[annd].map(dict_map)
-    # print(data[annd])
-    
+    if pandas_main_version != 1 :
+        data[annd] = data[annd].astype('datetime64[ms]')
+    else :
+        data[annd] = data[annd].astype('datetime64[ns]')
     return data
 
 def parallelize_ver_process(data):
@@ -438,7 +450,10 @@ def parallelize_ver_process(data):
     # mdate
     mdate_dict = parallel_process(split_mdate, data)
     data['mdate'] = data['ver'].map(mdate_dict)
-
+    if pandas_main_version != 1 :
+        data['mdate'] = data['mdate'].astype('datetime64[ms]')
+    else :
+        data['mdate'] = data['mdate'].astype('datetime64[ns]')
     # no
     no_dict = parallel_process(split_no, data)
     data['no'] = data['ver'].map(no_dict)
@@ -453,13 +468,13 @@ def parallelize_ver_process(data):
 #         return ExchangeCalendar.next_open(date)
 
 def annd_adjusted(ExchangeCalendar, date, shift_backward=True):
-        if ExchangeCalendar.is_session(date):
-            return date
-        
-        if shift_backward:
-            return ExchangeCalendar.prev_open(date)
-        
-        return ExchangeCalendar.next_open(date)
+    if ExchangeCalendar.is_session(date):
+        return date
+    
+    if shift_backward:
+        return ExchangeCalendar.prev_open(date)
+    
+    return ExchangeCalendar.next_open(date)
 
 def split_mdate(string:str):
     mdate = string.split('-')[:2]
