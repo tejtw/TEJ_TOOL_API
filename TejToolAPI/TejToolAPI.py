@@ -9,6 +9,9 @@ import dask
 from .meta_types import Meta_Types 
 import re
 
+global pandas_main_version
+pandas_main_version = pd.__version__.split('.')[0]
+
 dask.config.set({'dataframe.convert-string': False})
 
 # 映射函數 (dask_version)
@@ -97,7 +100,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     else:
         history_data = history_data.drop(columns=[i for i in history_data.columns if i in para.drop_keys+['fin_date', 'mon_sales_date', 'share_date']])
     
-    # Transfer to pandas dataframe   
+    # Transfer to pandas dataframe
     history_data = history_data.compute(meta = Meta_Types.all_meta)
 
     fill_dict = dict(zip(all_tables['trigger_tables']['COLUMNS'] , all_tables['trigger_tables']['fill_fg']))
@@ -108,10 +111,10 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
             if re.match(valid_column , column ) :
                 column_prefix.append(column)
                 break
-    
-    status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict[column] == 'Y' )  ]
 
-    n_status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict[column] == 'N' )  ]
+    status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict.get(column) == 'Y' )  ]
+
+    n_status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict.get(column) == 'N' )  ]
     
     event_data = history_data.loc[: , n_status_column]
 
@@ -309,14 +312,17 @@ def consecutive_merge(local_var, loop_array):
         temp = local_var[loop_array[i]]
         # modified 20240226 by Han
         d = right_keys[1] # d is date
-        if temp[d].dtype != data['mdate'].dtype :
-            data['mdate'] = data['mdate'].astype(temp[d].dtype)
+        if pandas_main_version != '1' :
+            temp[d] = temp[d].astype('datetime64[ms]')
+            data['mdate'] = data['mdate'].astype('datetime64[ms]')
+        else :
+            temp[d] = temp[d].astype('datetime64[ns]')
+            data['mdate'] = data['mdate'].astype('datetime64[ns]')
 
         data = dd.merge(data, local_var[loop_array[i]], left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
         # Drop surfeit columns.
 
         data = data.iloc[:,~data.columns.str.contains('_surfeit')]
-    pandas_main_version = pd.__version__.split('.')[0]
     if pandas_main_version == '1' :
         data['mdate'] = data['mdate'].astype('datetime64[ns]')
     else :
@@ -350,7 +356,6 @@ def get_trading_calendar(tickers, **kwargs):
             'mdate':mdate*len(tickers)
         })
         if len(data)<1:
-            pandas_main_version = pd.__version__.split('.')[0]
             if pandas_main_version == '1' : 
                 return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
             else :
@@ -387,7 +392,6 @@ def get_stock_calendar(tickers, **kwargs):
         
 
         if len(data)<1:
-            pandas_main_version = pd.__version__.split('.')[0]
             if pandas_main_version == '1' : 
                 return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
             else :
@@ -409,7 +413,6 @@ def get_stock_calendar(tickers, **kwargs):
         trading_calendar = trading_calendar.repartition(npartitions=npartitions)
 
     return trading_calendar
-
 
 
 
