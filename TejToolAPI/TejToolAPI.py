@@ -9,9 +9,9 @@ import dask
 from .meta_types import Meta_Types 
 import re
 
-global pandas_main_version
+global pandas_main_version , all_meta
 pandas_main_version = pd.__version__.split('.')[0]
-
+all_meta = Meta_Types.all_meta
 dask.config.set({'dataframe.convert-string': False})
 
 # 映射函數 (dask_version)
@@ -63,23 +63,21 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     
 
     # Combind fin_self_acc and fin_auditor
-    try:
+    # try:
         # Concate fin_self_acc with fin_auditor
+    if 'fin_self_acc' in all_tables.keys() and 'fin_auditor' in all_tables.keys():
         data_concat = dd.concat([all_tables['fin_self_acc'], all_tables['fin_auditor']]).reset_index(drop=True)
         all_tables['fin_auditor'] = data_concat.drop_duplicates(subset=['coid','mdate','annd'], keep='last')
 
-        # Process two fin dataframe
+        # # Process two fin dataframe
         all_tables['fin_auditor'] = process_fin_data(all_tables=all_tables, variable='fin_auditor', tickers=ticker, start=start, end= end)
         
-        del all_tables['fin_self_acc']
-
-    except:
+        # del all_tables['fin_self_acc']
+    else :
         if 'fin_auditor' in all_tables.keys():
             all_tables['fin_auditor'] = process_fin_data(all_tables=all_tables, variable='fin_auditor', tickers=ticker, start=start, end= end)
-
         elif 'fin_self_acc' in all_tables.keys():
             all_tables['fin_self_acc'] = process_fin_data(all_tables=all_tables, variable='fin_self_acc', tickers=ticker, start=start, end= end)
-        
         else:
             pass
 
@@ -92,7 +90,6 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     # Consecutive merge.
     history_data = consecutive_merge(all_tables,  trigger_tables)
 
-
     # Drop redundant columns of the merged table.
     if require_annd:
         history_data = history_data.drop(columns=[i for i in history_data.columns if i in para.drop_keys])
@@ -101,7 +98,8 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
         history_data = history_data.drop(columns=[i for i in history_data.columns if i in para.drop_keys+['fin_date', 'mon_sales_date', 'share_date']])
     
     # Transfer to pandas dataframe
-    history_data = history_data.compute(meta = Meta_Types.all_meta)
+    
+    history_data = history_data.compute(meta = all_meta)
 
     fill_dict = dict(zip(all_tables['trigger_tables']['COLUMNS'] , all_tables['trigger_tables']['fill_fg']))
 
@@ -135,13 +133,13 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     # merge back evnet-type data, which does not need ffill.
     history_data = dd.merge(history_data, event_data, on= ['coid','mdate'], how = 'left')
 
-    history_data = history_data.compute(meta = Meta_Types.all_meta)
+    history_data = history_data.compute(meta = all_meta )
 
     # Drop suspend trading day
     all_tables['coid_calendar']['mdate'] = all_tables['coid_calendar']['mdate'].astype(history_data['mdate'].dtype)
     
     history_data = dd.merge(all_tables['coid_calendar'], history_data, on= ['coid','mdate'], how = 'left')
-    history_data = history_data.compute(meta = Meta_Types.all_meta)
+    history_data = history_data.compute(meta = all_meta)
 
     # Truncate resuly by user-setted start.
     history_data = history_data.loc[history_data.mdate >= pd.Timestamp(org_start),:]
@@ -159,10 +157,17 @@ def process_fin_data(all_tables, variable, tickers, start, end):
     # transfer to daily basis
     days = para.exc.calendar
     days = days.rename(columns = {'zdate':'all_dates'})
-    if days['all_dates'].dtype != all_tables[variable]['annd'].dtype :
-        days['all_dates'] = days['all_dates'].astype(all_tables[variable]['annd'].dtype)
+    if (pandas_main_version != '1') :
+        all_tables[variable]['annd'] = all_tables[variable]['annd'].astype('datetime64[ms]')
+        all_tables[variable]['mdate'] = all_tables[variable]['mdate'].astype('datetime64[ms]')
+    else :
+        all_tables[variable]['annd'] = all_tables[variable]['annd'].astype('datetime64[ns]')
+        all_tables[variable]['mdate'] = all_tables[variable]['mdate'].astype('datetime64[ns]')
+
     all_tables[variable] = all_tables[variable].rename(columns = {'mdate':'fin_date'})
     all_tables[variable] = dd.merge(days, all_tables[variable], left_on=['all_dates'], right_on=['annd'], how='left')
+    
+
 
     # Delete the redundant dataframe to release memory space
     del days
@@ -278,7 +283,6 @@ def triggers(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'],  i
         extend_fg = para.fin_invest_tables.loc[para.fin_invest_tables['TABLE_NAMES']==table_name,'EXTEND_FG'].item()
         if api_code == 'A0002' or api_code == 'A0004':
             exec(f'{table_name} = funct_map[api_code](api_table, ticker, selected_columns, start = start,  end = end, fin_type = fin_type, npartitions = npartitions , extend_fg = extend_fg )')
-        
         else:
             exec(f'{table_name} = funct_map[api_code](api_table, ticker, selected_columns, start = start,  end = end, npartitions = npartitions , extend_fg = extend_fg)')
         if (extend_fg == 'Y') :
@@ -301,32 +305,34 @@ def get_internal_code(fields:list):
 
 def consecutive_merge(local_var, loop_array):
     table_keys = para.map_table.merge(para.merge_keys)
-
+    
     # tables 兩兩合併
     data = local_var['trading_calendar']
+    if pandas_main_version != '1' :
+        data['mdate'] = data['mdate'].astype('datetime64[ms]')
+    else :
+        data['mdate'] = data['mdate'].astype('datetime64[ns]')
     
     for i in range(len(loop_array)):
         right_keys = table_keys.loc[table_keys['TABLE_NAMES']==loop_array[i], 'KEYS'].tolist()
         # Merge tables by dask merge.
-        
         temp = local_var[loop_array[i]]
         # modified 20240226 by Han
+        
         d = right_keys[1] # d is date
         if pandas_main_version != '1' :
             temp[d] = temp[d].astype('datetime64[ms]')
-            data['mdate'] = data['mdate'].astype('datetime64[ms]')
         else :
             temp[d] = temp[d].astype('datetime64[ns]')
-            data['mdate'] = data['mdate'].astype('datetime64[ns]')
-
-        data = dd.merge(data, local_var[loop_array[i]], left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
+            
+        data = dd.merge(data, temp, left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
         # Drop surfeit columns.
-
         data = data.iloc[:,~data.columns.str.contains('_surfeit')]
-    if pandas_main_version == '1' :
-        data['mdate'] = data['mdate'].astype('datetime64[ns]')
-    else :
-        data['mdate'] = data['mdate'].astype('datetime64[ms]')
+    if 'mdate' in data.columns :
+        if pandas_main_version == '1' :
+            data['mdate'] = data['mdate'].astype('datetime64[ns]')
+        else :
+            data['mdate'] = data['mdate'].astype('datetime64[ms]')
     return data
 
 def keep_repo_date(data):
@@ -360,7 +366,10 @@ def get_trading_calendar(tickers, **kwargs):
                 return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
             else :
                 return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ms]')})
-    
+        if pandas_main_version != '1' : 
+            data['mdate'] = data['mdate'].astype('datetime64[ms]')
+        else :
+            data['mdate'] = data['mdate'].astype('datetime64[ns]')
         return data
 
 
