@@ -106,7 +106,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     for column in history_data.columns :
         for valid_column in all_tables['trigger_tables']['COLUMNS'].tolist() :
             if re.match(valid_column , column ) :
-                column_prefix.append(valid_column)
+                column_prefix.append(column)
                 break
     
     status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict[column] == 'Y' )  ]
@@ -409,6 +409,7 @@ def get_stock_calendar(tickers, **kwargs):
         trading_calendar = trading_calendar.repartition(npartitions=npartitions)
 
     return trading_calendar
+
 
 
 
