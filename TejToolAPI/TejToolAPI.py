@@ -109,9 +109,9 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
                 column_prefix.append(valid_column)
                 break
     
-    status_column = [True if (column in ['coid' , 'mdate'] or fill_dict[column] == 'Y' ) else False for column in column_prefix ]
+    status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict[column] == 'Y' )  ]
 
-    n_status_column = [True if (column in ['coid' , 'mdate'] or fill_dict[column] == 'N' ) else False for column in column_prefix ]
+    n_status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict[column] == 'N' )  ]
     
     event_data = history_data.loc[: , n_status_column]
 
@@ -409,6 +409,7 @@ def get_stock_calendar(tickers, **kwargs):
         trading_calendar = trading_calendar.repartition(npartitions=npartitions)
 
     return trading_calendar
+
 
 
 
