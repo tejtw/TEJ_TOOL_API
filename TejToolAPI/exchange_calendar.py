@@ -6,7 +6,7 @@ import numpy as np
 
 module_dir = os.path.dirname(os.path.abspath(__file__))
 tmp_path = os.path.join(module_dir,'temp')
-
+pandas_main_version = pd.__version__.split('.')[0]
 # If temp folder not exists, create it. 
 if not os.path.exists(tmp_path):
     os.makedirs(tmp_path)
@@ -42,6 +42,7 @@ class ExchangeCalendar:
                             date_rmk = '',
                             opts = {'columns':['zdate']}
                             )
+            
             calendar.to_csv(calendar_file_path, index=False)
             
         else:
@@ -58,7 +59,10 @@ class ExchangeCalendar:
     
                 calendar = pd.concat([calendar, update]).drop_duplicates().reset_index(drop = True)
                 calendar.to_csv(calendar_file_path, index=False)
-
+        if pandas_main_version != '1' :
+            calendar['zdate'] = calendar['zdate'].astype('datetime64[ms]')
+        else :
+            calendar['zdate'] = calendar['zdate'].astype('datetime64[ns]')
         return calendar
 
     def is_session(self, date):
