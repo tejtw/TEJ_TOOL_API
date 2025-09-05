@@ -173,13 +173,15 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
         # monthly revenue
         if table == 'TWN/APISALE1' :
             if 'key3' not in columns :
-                columns += ['key3']
+                new_column = columns + ['key3']
+            else :
+                new_column = columns
             data_sets = tejapi.fastget(table,
                         coid = tickers,
                         paginate = True,
                         chinese_column_name=False,
                         mdate = {'gte':start,'lte':end},
-                        opts = {'columns':columns, 'sort':{'coid.asc', f'{annd}.asc' , 'mdate.asc'}})
+                        opts = {'columns':new_column, 'sort':{'coid.asc', f'{annd}.asc' , 'mdate.asc'}})
             data_sets = data_sets.sort_values(by = ['coid' , 'annd_s' , 'mdate' , 'key3'] ,ascending = True)
             dfgb = data_sets.groupby(['coid'])
             while any([i for i in dfgb['mdate'].apply(lambda x: x.diff()).fillna(pd.Timedelta(days = 0)).values if i < 0]) :
@@ -187,11 +189,8 @@ def get_alternative_data(table, tickers=[], columns = [], **kwargs):
                 data_sets.fillna({'diff' : pd.Timedelta(days= 0 )} , inplace= True)
                 data_sets = data_sets.loc[data_sets['diff'] >= pd.Timedelta(0)]
                 dfgb = data_sets.groupby(['coid'])
-            del data_sets['key3']
             if 'diff' in data_sets.columns :
                 del data_sets['diff'] 
-            if 'key3' in columns :
-                columns.remove('key3')
         else :
             # alternative data
             data_sets = tejapi.fastget(table,
@@ -718,4 +717,5 @@ class TejDaskAPI:
         
         return datasets
         
+
 
