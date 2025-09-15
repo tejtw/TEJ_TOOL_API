@@ -161,6 +161,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     lang_map = transfer_language_columns(data.columns, isChinese=transfer_to_chinese)
     data = data.rename(columns= lang_map)
     data = data.reset_index(drop=True)
+    data = data.sort_values(by = ['coid','mdate'])
     get_api_key_info(show_progress)
 
     return data
@@ -369,6 +370,7 @@ def get_stock_calendar(tickers, **kwargs):
         trading_calendar = trading_calendar.repartition(npartitions=npartitions)
 
     return trading_calendar
+
 
 
 
