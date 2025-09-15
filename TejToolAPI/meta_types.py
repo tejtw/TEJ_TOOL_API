@@ -4,27 +4,6 @@ import pandas as pd
 # current directory
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
-# class Fin_meta_types:
-#     xlsx_path = os.path.join(module_dir,'tables','fin_meta.json')
-#     with open(xlsx_path) as json_file:
-#         meta_types = json.load(json_file)
-#         json_file.close()
-
-# class Stk_meta_types:
-#     xlsx_path = os.path.join(module_dir,'tables','stk_meta.json')
-#     with open(xlsx_path) as json_file:
-#         meta_types = json.load(json_file)
-#         json_file.close()
-
-# class Alt_Event_meta_types:
-#     xlsx_path = os.path.join(module_dir,'tables','alt_event_meta.json')
-#     with open(xlsx_path) as json_file:
-#         meta_types = json.load(json_file)
-#         json_file.close()
-
-
-
-
 class Meta_Types:
     pandas_main_version = pd.__version__.split('.')[0]
     all_meta =  {
@@ -47,4 +26,5 @@ class Meta_Types:
     if pandas_main_version != '1' :
         for key ,value in all_meta.items() :
             if value == 'datetime64[ns]' :
+
                 all_meta.update({key : 'datetime64[ms]'})
