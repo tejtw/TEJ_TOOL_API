@@ -38,10 +38,11 @@ table_API = pd.read_excel(xlsx_path, sheet_name='API')
 transfer_language_table = pd.read_excel(xlsx_path, sheet_name='transfer_language')
 
 # 取得 table_names, od, keys
-# map_table: table_name, odd
+# map_table: table_name, od
 map_table = pd.read_excel(xlsx_path,sheet_name='table_od')
 # merge_keys: od, merge_keys
 merge_keys = pd.read_excel(xlsx_path,sheet_name='merge_keys')
+
 
 
 
