@@ -107,15 +107,19 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
                              npartitions=npartitions,
                              )
     data = data.compute(meta = all_meta)
+    
     # # Drop redundant columns of the merged table.
     if require_annd:
         data = data.drop(columns=[i for i in data.columns if i in para.drop_keys])
+        column_prefix = ['coid' , 'mdate' ,'fin_date', 'mon_sales_date', 'share_date']
     else:
         data = data.drop(columns=[i for i in data.columns if i in para.drop_keys+['fin_date', 'mon_sales_date', 'share_date']])
+        column_prefix = ['coid' , 'mdate']
+
     triggered_columns = search_table(columns)
+
     fill_dict = dict(zip(triggered_columns['COLUMNS'], triggered_columns['fill_fg']))
 
-    column_prefix = ['coid' , 'mdate']
     for column in data.columns :
         for valid_column in triggered_columns['COLUMNS'].tolist() :
             if re.match(valid_column,column) :
@@ -124,16 +128,16 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
                 fill_dict[column] = value
                 break
 
-    status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict.get(column) == 'Y' )  ]
+    status_column = [column for column in column_prefix if ( column in data.columns and (column in column_prefix or fill_dict.get(column) == 'Y') )  ]
 
-    n_status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict.get(column) == 'N' )  ]
+    n_status_column = [column for column in column_prefix if ( column in data.columns and (column in column_prefix or fill_dict.get(column) != 'Y') )  ]
     
     event_data = data.loc[: , n_status_column]
 
     data = data.loc[: , status_column]
     
-
-    # # Drop repeat rows from the table.
+    column_prefix = list(set(column_prefix).intersection(set(data.columns.tolist())))
+    # Drop repeat rows from the table.
 
     # Sort values by coid and mdate
     data = data.sort_values(['coid', 'mdate'] , ascending=True).reset_index(drop=True)
@@ -143,7 +147,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     data = data.groupby(['coid'], group_keys=False).apply(lambda x: x.ffill())
     
     # merge back evnet-type data, which does not need ffill.
-    data = dd.merge(data, event_data, on= ['coid','mdate'], how = 'left')
+    data = dd.merge(data, event_data, on= column_prefix , how = 'left')
 
     data = data.compute(meta = all_meta )
 
