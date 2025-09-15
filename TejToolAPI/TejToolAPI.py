@@ -1,11 +1,11 @@
 import tejapi
+import dask
 import dask.dataframe as dd
 import pandas as pd
 import gc
 from . import parameters as para
-from . import Map_Dask_API as dask_api
+from .Map_Dask_API import ToolApiMeta , FinSelfAccData , TradingData , AlternativeData , FinAuditorData
 from .utils import get_api_key_info 
-import dask
 from .meta_types import Meta_Types 
 import re
 
@@ -13,14 +13,6 @@ global pandas_main_version , all_meta
 pandas_main_version = pd.__version__.split('.')[0]
 all_meta = Meta_Types.all_meta
 dask.config.set({'dataframe.convert-string': False})
-
-# 映射函數 (dask_version)
-funct_map = {
-    'A0001':dask_api.get_trading_data,
-    'A0002':dask_api.get_fin_data,
-    'A0003':dask_api.get_alternative_data,
-    'A0004':dask_api.get_fin_auditor
-}
 
 def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'], include_self_acc:str = 'N', **kwargs):
     """
@@ -58,54 +50,74 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     org_start = start_dt.strftime('%Y-%m-%d')
     shift_start = shift_start.strftime('%Y-%m-%d')
 
-    # Triggers 
-    all_tables = triggers(ticker = ticker, columns= columns, start= shift_start, end= end, fin_type= fin_type, include_self_acc= include_self_acc, npartitions = npartitions)
+
+    columns = get_internal_code(columns)
+
+    trading_data_dict = TradingData(
+            tickers=ticker ,
+            start= shift_start ,
+            end = end ,
+            extend_fg = 'N' ,
+            npartitions=npartitions , 
+            columns = columns,
+            freq = fin_type 
+            ).run()
+    alternative_data_dict = AlternativeData(
+            tickers=ticker ,
+            start= shift_start ,
+            end = end ,
+            extend_fg = 'N' ,
+            npartitions=npartitions , 
+            columns = columns,
+            freq = fin_type 
+            ).run()
+    fin_audit_data_dict = FinAuditorData(
+            tickers=ticker ,
+            start= shift_start ,
+            end = end ,
+            extend_fg = 'N' ,
+            npartitions=npartitions , 
+            columns = columns,
+            freq = fin_type 
+            ).run()
+    if include_self_acc == 'Y' :
+        fin_self_acc_data_dict = FinSelfAccData(
+            tickers=ticker ,
+            start= shift_start ,
+            end = end ,
+            extend_fg = 'N' ,
+            npartitions=npartitions , 
+            columns = columns,
+            freq = fin_type 
+            ).run()
+        fin_audit_data_dict.update(fin_self_acc_data_dict)
     
+    for key , value in fin_audit_data_dict.items() :
+        fin_audit_data_dict[key] = process_fin_data(value)
 
-    # Combind fin_self_acc and fin_auditor
-    # try:
-        # Concate fin_self_acc with fin_auditor
-    if 'fin_self_acc' in all_tables.keys() and 'fin_auditor' in all_tables.keys():
-        data_concat = dd.concat([all_tables['fin_self_acc'], all_tables['fin_auditor']]).reset_index(drop=True)
-        all_tables['fin_auditor'] = data_concat.drop_duplicates(subset=['coid','mdate','annd'], keep='last')
-
-        # # Process two fin dataframe
-        all_tables['fin_auditor'] = process_fin_data(all_tables=all_tables, variable='fin_auditor', tickers=ticker, start=start, end= end)
-        
-        # del all_tables['fin_self_acc']
-    else :
-        if 'fin_auditor' in all_tables.keys():
-            all_tables['fin_auditor'] = process_fin_data(all_tables=all_tables, variable='fin_auditor', tickers=ticker, start=start, end= end)
-        elif 'fin_self_acc' in all_tables.keys():
-            all_tables['fin_self_acc'] = process_fin_data(all_tables=all_tables, variable='fin_self_acc', tickers=ticker, start=start, end= end)
-        else:
-            pass
-
-    # Collect variables that being triggered
-    trigger_tables = [i for i in all_tables.keys() if i in para.fin_invest_tables['TABLE_NAMES'].unique().tolist()]
-
-    # Sort by OD
-    trigger_tables.sort(key = lambda x: para.map_table.loc[para.map_table['TABLE_NAMES']==x, 'OD'].item())
-    
+    all_dict = trading_data_dict.copy()
+    all_dict.update(alternative_data_dict)
+    all_dict.update(fin_audit_data_dict)
     # Consecutive merge.
-    history_data = consecutive_merge(all_tables,  trigger_tables)
-
-    # Drop redundant columns of the merged table.
+    
+    data = consecutive_merge(tables= all_dict ,
+                             tickers=ticker, 
+                             start=shift_start, 
+                             end=end,
+                             npartitions=npartitions,
+                             )
+    data = data.compute(meta = all_meta)
+    # # Drop redundant columns of the merged table.
     if require_annd:
-        history_data = history_data.drop(columns=[i for i in history_data.columns if i in para.drop_keys])
-        
+        data = data.drop(columns=[i for i in data.columns if i in para.drop_keys])
     else:
-        history_data = history_data.drop(columns=[i for i in history_data.columns if i in para.drop_keys+['fin_date', 'mon_sales_date', 'share_date']])
-    
-    # Transfer to pandas dataframe
-    
-    history_data = history_data.compute(meta = all_meta)
-
-    fill_dict = dict(zip(all_tables['trigger_tables']['COLUMNS'] , all_tables['trigger_tables']['fill_fg']))
+        data = data.drop(columns=[i for i in data.columns if i in para.drop_keys+['fin_date', 'mon_sales_date', 'share_date']])
+    triggered_columns = search_table(columns)
+    fill_dict = dict(zip(triggered_columns['COLUMNS'], triggered_columns['fill_fg']))
 
     column_prefix = ['coid' , 'mdate']
-    for column in history_data.columns :
-        for valid_column in all_tables['trigger_tables']['COLUMNS'].tolist() :
+    for column in data.columns :
+        for valid_column in triggered_columns['COLUMNS'].tolist() :
             if re.match(valid_column,column) :
                 column_prefix.append(column)
                 value = fill_dict[valid_column]
@@ -116,71 +128,63 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
 
     n_status_column = [column for column in column_prefix if (column in ['coid' , 'mdate'] or fill_dict.get(column) == 'N' )  ]
     
-    event_data = history_data.loc[: , n_status_column]
+    event_data = data.loc[: , n_status_column]
 
-    history_data = history_data.loc[: , status_column]
-    
+    data = data.loc[: , status_column]
     
 
-    # Drop repeat rows from the table.
-    history_data = history_data.drop_duplicates(subset=['coid', 'mdate'], keep='last')
+    # # Drop repeat rows from the table.
 
     # Sort values by coid and mdate
-    history_data = history_data.sort_values(['coid', 'mdate']).reset_index(drop=True)
-
+    data = data.sort_values(['coid', 'mdate'] , ascending=True).reset_index(drop=True)
+    
     # Apply forward value to fill the precending NaN.
     
-    history_data = history_data.groupby('coid', group_keys = False).apply(dask_api.fillna_multicolumns)
+    data = data.groupby(['coid'], group_keys=False).apply(lambda x: x.ffill())
     
     # merge back evnet-type data, which does not need ffill.
-    history_data = dd.merge(history_data, event_data, on= ['coid','mdate'], how = 'left')
+    data = dd.merge(data, event_data, on= ['coid','mdate'], how = 'left')
 
-    history_data = history_data.compute(meta = all_meta )
+    data = data.compute(meta = all_meta )
 
     # Drop suspend trading day
-    all_tables['coid_calendar']['mdate'] = all_tables['coid_calendar']['mdate'].astype(history_data['mdate'].dtype)
+    coid_calendar = get_stock_calendar(tickers = ticker, start = org_start , end = end , npartitions = npartitions).compute()
     
-    history_data = dd.merge(all_tables['coid_calendar'], history_data, on= ['coid','mdate'], how = 'left')
-    history_data = history_data.compute(meta = all_meta)
+    data = dd.merge(coid_calendar, data, on= ['coid','mdate'], how = 'left')
+    data = data.compute(meta = all_meta)
 
     # Truncate resuly by user-setted start.
-    history_data = history_data.loc[history_data.mdate >= pd.Timestamp(org_start),:]
+    data = data.loc[data.mdate >= pd.Timestamp(org_start),:]
 
     # Transfer columns to abbreviation text.
     
-    lang_map = transfer_language_columns(history_data.columns, isChinese=transfer_to_chinese)
-    history_data = history_data.rename(columns= lang_map)
-    history_data = history_data.reset_index(drop=True)
+    lang_map = transfer_language_columns(data.columns, isChinese=transfer_to_chinese)
+    data = data.rename(columns= lang_map)
+    data = data.reset_index(drop=True)
     get_api_key_info(show_progress)
 
-    return history_data
+    return data
 
-def process_fin_data(all_tables, variable, tickers, start, end):
+def process_fin_data(table):
     # transfer to daily basis
     days = para.exc.calendar
     days = days.rename(columns = {'zdate':'all_dates'})
     if (pandas_main_version != '1') :
-        all_tables[variable]['annd'] = all_tables[variable]['annd'].astype('datetime64[ms]')
-        all_tables[variable]['mdate'] = all_tables[variable]['mdate'].astype('datetime64[ms]')
+        table['annd'] = table['annd'].astype('datetime64[ms]')
+        table['mdate'] = table['mdate'].astype('datetime64[ms]')
     else :
-        all_tables[variable]['annd'] = all_tables[variable]['annd'].astype('datetime64[ns]')
-        all_tables[variable]['mdate'] = all_tables[variable]['mdate'].astype('datetime64[ns]')
+        table['annd'] = table['annd'].astype('datetime64[ns]')
+        table['mdate'] = table['mdate'].astype('datetime64[ns]')
 
-    all_tables[variable] = all_tables[variable].rename(columns = {'mdate':'fin_date'})
-    all_tables[variable] = dd.merge(days, all_tables[variable], left_on=['all_dates'], right_on=['annd'], how='left')
-    
-
+    table = table.rename(columns = {'mdate':'fin_date'})
+    table = dd.merge(days, table, left_on=['all_dates'], right_on=['annd'], how='left')
 
     # Delete the redundant dataframe to release memory space
     del days
     gc.collect()
     
-    return all_tables[variable]
+    return table
 
-def to_daskDataFrame(locals, indexs, npartitions=para.npartitions_local):
-    for i in indexs:
-        locals[i] = dd.from_pandas(locals[i], npartitions=npartitions)
-    return locals
 
 def transfer_language_columns(columns, isChinese = False):
     def get_col_name(col, isChinese):
@@ -254,49 +258,6 @@ def extend_columns(data : dd.DataFrame) :
 
     return result
 
-def triggers(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'],  include_self_acc:str = 'N', **kwargs):
-    # Setting default value of the corresponding parameters
-    start = kwargs.get('start', para.default_start)
-    end = kwargs.get('end', para.default_end)
-    npartitions = kwargs.get('npartitions',  para.npartitions_local)
-    
-    # Tranfer columns from any type (chinese, english) to internal code  
-    columns = get_internal_code(columns)    
-
-    # Kick out `coid` and `mdate` from
-
-    columns = [col for col in columns if col not in ['coid', 'mdate','key3', 'no','sem','fin_type', 'curr', 'fin_ind'] ]
-
-    # Qualify the table triggered by the given `columns`
-    trigger_tables = search_table(columns)
-    
-    # Get trading calendar of all given tickers
-    trading_calendar = get_trading_calendar(ticker, start = start, end = end, npartitions = npartitions)
-
-    # If include_self_acc equals to 'N', then delete the fin_self_acc in the trigger_tables list
-    if include_self_acc != 'Y':
-        trigger_tables = trigger_tables.loc[trigger_tables['TABLE_NAMES']!='fin_self_acc',:]
-    
-    for table_name in trigger_tables['TABLE_NAMES'].unique():
-        selected_columns = trigger_tables.loc[trigger_tables['TABLE_NAMES']==table_name, 'COLUMNS'].tolist()
-        
-        api_code = para.table_API.loc[para.table_API['TABLE_NAMES']==table_name, 'API_CODE'].item()
-        api_table = para.fin_invest_tables.loc[para.fin_invest_tables['TABLE_NAMES']==table_name,'API_TABLE'].item()
-        extend_fg = para.fin_invest_tables.loc[para.fin_invest_tables['TABLE_NAMES']==table_name,'EXTEND_FG'].item()
-        if api_code == 'A0002' or api_code == 'A0004':
-            exec(f'{table_name} = funct_map[api_code](api_table, ticker, selected_columns, start = start,  end = end, fin_type = fin_type, npartitions = npartitions , extend_fg = extend_fg )')
-        else:
-            exec(f'{table_name} = funct_map[api_code](api_table, ticker, selected_columns, start = start,  end = end, npartitions = npartitions , extend_fg = extend_fg)')
-        if (extend_fg == 'Y') :
-            locals()[f'{table_name}'] = extend_columns(locals()[f'{table_name}'])
-
-    if 'stk_price' in trigger_tables['TABLE_NAMES'].unique().tolist():
-        locals()['stk_price'] = locals()['stk_price'].compute()
-        coid_calendar = locals()['stk_price'][['coid','mdate']]
-    else:
-        coid_calendar = get_stock_calendar(ticker, start = start, end = end, npartitions = npartitions).compute()
-    return locals()
-
 def get_internal_code(fields:list):
     columns = []
     for c in ['ENG_COLUMN_NAMES', 'CHN_COLUMN_NAMES', 'COLUMNS']:
@@ -305,43 +266,24 @@ def get_internal_code(fields:list):
     columns = list(set(columns))
     return columns
 
-def consecutive_merge(local_var, loop_array):
-    table_keys = para.map_table.merge(para.merge_keys)
+def consecutive_merge(tables , **kwargs) :
+    used_api_tables = [key for key in tables.keys()]
+    full_para_table = para.fin_invest_tables.merge(para.map_table , on = 'TABLE_NAMES' , how = 'left')
+    full_para_table = full_para_table.merge(para.merge_keys , on = 'OD' , how = 'left')
     
-    # tables 兩兩合併
-    data = local_var['trading_calendar']
-    if pandas_main_version != '1' :
-        data['mdate'] = data['mdate'].astype('datetime64[ms]')
-    else :
-        data['mdate'] = data['mdate'].astype('datetime64[ns]')
-    
-    for i in range(len(loop_array)):
-        right_keys = table_keys.loc[table_keys['TABLE_NAMES']==loop_array[i], 'KEYS'].tolist()
-        # Merge tables by dask merge.
-        temp = local_var[loop_array[i]]
-        # modified 20240226 by Han
+    trading_calendar = get_trading_calendar(kwargs.get('tickers', []),
+                                            start = kwargs.get('start', para.default_start), 
+                                            end = kwargs.get('end', para.default_end), 
+                                            npartitions = kwargs.get('npartitions',  para.npartitions_local  )
+                                            )
+    for api_table in used_api_tables :
+        right_merge_key = full_para_table.loc[full_para_table['API_TABLE']==api_table , 'KEYS'].tolist()
         
-        d = right_keys[1] # d is date
-        if pandas_main_version != '1' :
-            temp[d] = temp[d].astype('datetime64[ms]')
-        else :
-            temp[d] = temp[d].astype('datetime64[ns]')
-            
-        data = dd.merge(data, temp, left_on = ['coid', 'mdate'], right_on = right_keys, how = 'left', suffixes = ('','_surfeit'))
-        # Drop surfeit columns.
-        data = data.iloc[:,~data.columns.str.contains('_surfeit')]
-    if 'mdate' in data.columns :
-        if pandas_main_version == '1' :
-            data['mdate'] = data['mdate'].astype('datetime64[ns]')
-        else :
-            data['mdate'] = data['mdate'].astype('datetime64[ms]')
-    return data
-
-def keep_repo_date(data):
-    if 'fin_date' in data.columns:
-       data = data.rename({'fin_date_surfeit':'fin_date'})
-
-    return data
+        trading_calendar = dd.merge(trading_calendar, tables[api_table], left_on = ['coid', 'mdate'], right_on = right_merge_key, how = 'left', suffixes = ('','_surfeit'))
+        trading_calendar = trading_calendar.iloc[:,~trading_calendar.columns.str.contains('_surfeit')]
+        
+    
+    return trading_calendar
 
 def get_trading_calendar(tickers, **kwargs):
     # Setting default value of the corresponding parameters.
@@ -353,21 +295,21 @@ def get_trading_calendar(tickers, **kwargs):
                         paginate = True,
                         chinese_column_name=False,
                         mdate = {'gte':start,'lte':end},
-                        opts = {'columns':['mdate'], 'sort':{'coid.asc', 'mdate.asc'}})
+                        opts = {'columns':['mdate']})
     
     def get_index_trading_date(index , tickers):
 
         mdate = index['mdate'].tolist()
 
         data = pd.DataFrame({
-            'coid':[tick for tick in tickers for i in mdate],
+            'coid':[ticker for ticker in tickers for date in mdate],
             'mdate':mdate*len(tickers)
         })
         if len(data)<1:
-            if pandas_main_version == '1' : 
-                return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
-            else :
+            if pandas_main_version != '1' : 
                 return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ms]')})
+            else :
+                return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
         if pandas_main_version != '1' : 
             data['mdate'] = data['mdate'].astype('datetime64[ms]')
         else :
@@ -376,7 +318,7 @@ def get_trading_calendar(tickers, **kwargs):
 
 
     # Calculate the number of tickers in each partition. 
-    ticker_partitions = dask_api.get_partition_group(tickers = tickers, npartitions= npartitions)
+    ticker_partitions = ToolApiMeta.get_partition_group(tickers = tickers, npartitions= npartitions)
 
     # Submit jobs to the parallel cores
     trading_calendar = dd.from_delayed([dask.delayed(get_index_trading_date)(index , tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)])
@@ -399,22 +341,25 @@ def get_stock_calendar(tickers, **kwargs):
                         paginate = True,
                         chinese_column_name=False,
                         mdate = {'gte':start,'lte':end},
-                        opts = {'columns':['coid', 'mdate'], 'sort':{'coid.asc', 'mdate.asc'}})
+                        opts = {'columns':['coid', 'mdate']})
         
 
         if len(data)<1:
-            if pandas_main_version == '1' : 
-                return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
-            else :
+            if pandas_main_version != '1' : 
                 return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ms]')})
-    
+            else :
+                return pd.DataFrame({'coid': pd.Series(dtype='object'), 'mdate': pd.Series(dtype='datetime64[ns]')})
+        if pandas_main_version != '1' :
+            data['mdate'] = data['mdate'].astype('datetime64[ms]')
+        else :
+            data['mdate'] = data['mdate'].astype('datetime64[ns]')
         return data
             
     
     # Define the meta of the dataframe
 
     # Calculate the number of tickers in each partition. 
-    ticker_partitions = dask_api.get_partition_group(tickers = tickers, npartitions= npartitions)
+    ticker_partitions = ToolApiMeta.get_partition_group(tickers = tickers, npartitions= npartitions)
 
     # Submit jobs to the parallel cores
     trading_calendar = dd.from_delayed([dask.delayed(get_data)(tickers[(i-1)*npartitions:i*npartitions]) for i in range(1, ticker_partitions)])
