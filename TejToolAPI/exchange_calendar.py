@@ -16,26 +16,26 @@ calendar_file_path = os.path.join(tmp_path, 'exchange_calendar.csv')
 
 # Check whether the file exists.
 if os.path.isfile(calendar_file_path):
-    catch = False
+    cache = False
 else:
-    catch = True
+    cache = True
 
 if 'exchange_calendar.csv' in os.listdir(tmp_path):
-    catch = False
+    cache = False
 else:
-    catch = True
+    cache = True
 
 class ExchangeCalendar:
     def __init__(self) -> None:
-        self.calendar = self.get_trading_calendar(catch)
+        self.calendar = self.get_trading_calendar(cache)
         self.calendar_list = self.calendar['zdate'].tolist()
         self.date_int = self.calendar['zdate'].values.astype(np.int64)
 
-    def get_trading_calendar(self, catch):
+    def get_trading_calendar(self, cache):
         """
         Extrieve calendar from tejapi-TWN/TRADEDAY_TWSE, retain all trading dates of the calendar.
         """
-        if catch:
+        if cache:
             calendar = tejapi.fastget('TWN/TRADEDAY_TWSE', 
                             paginate = True,
                             mkt = 'TWSE',
