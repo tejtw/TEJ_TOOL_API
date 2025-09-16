@@ -1150,7 +1150,7 @@ class AlternativeData(ToolApiMeta):
                 del data_sets['diff']
         else :
             # alternative data
-            print(target_columns)
+            
             data_sets = tejapi.fastget(table,
                             coid = tickers,
                             paginate = True,
@@ -1467,4 +1467,5 @@ class FinAuditorData(ToolApiMeta):
             data_sets = data_sets.repartition(npartitions=self._npartitions)
 
         return data_sets
+
 
