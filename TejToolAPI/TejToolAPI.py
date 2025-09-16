@@ -106,7 +106,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
                              end=end,
                              npartitions=npartitions,
                              )
-    print(data.columns)
+    
     data = data.compute(meta = all_meta)
     
     # # Drop redundant columns of the merged table.
@@ -376,6 +376,7 @@ def get_stock_calendar(tickers, **kwargs):
         trading_calendar = trading_calendar.repartition(npartitions=npartitions)
 
     return trading_calendar
+
 
 
 
