@@ -106,6 +106,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
                              end=end,
                              npartitions=npartitions,
                              )
+    
     data = data.compute(meta = all_meta)
     
     # # Drop redundant columns of the merged table.
@@ -128,9 +129,9 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
                 fill_dict[column] = value
                 break
 
-    status_column = [column for column in column_prefix if ( column in data.columns and (column in column_prefix or fill_dict.get(column) == 'Y') )  ]
+    status_column = list(set([column for column in column_prefix if ( column in data.columns and (column in column_prefix or fill_dict.get(column) == 'Y') )  ]))
 
-    n_status_column = [column for column in column_prefix if ( column in data.columns and (column in column_prefix or fill_dict.get(column) != 'Y') )  ]
+    n_status_column = list(set([column for column in column_prefix if ( column in data.columns and (column in column_prefix or fill_dict.get(column) != 'Y') )  ]))
     
     event_data = data.loc[: , n_status_column]
 
@@ -140,6 +141,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     # Drop repeat rows from the table.
 
     # Sort values by coid and mdate
+    
     data = data.sort_values(['coid', 'mdate'] , ascending=True).reset_index(drop=True)
     
     # Apply forward value to fill the precending NaN.
@@ -374,6 +376,7 @@ def get_stock_calendar(tickers, **kwargs):
         trading_calendar = trading_calendar.repartition(npartitions=npartitions)
 
     return trading_calendar
+
 
 
 
