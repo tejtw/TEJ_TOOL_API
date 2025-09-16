@@ -800,12 +800,12 @@ class FinSelfAccData(ToolApiMeta):
     def fetch_data(self , table , tickers) -> pd.DataFrame :
         """獲取財務數據"""
         target_columns = list(
-            set(self.get_available_columns_by_table(table)).intersection(set(self.columns))
+            set(self.get_available_columns_by_table(table)).intersection(set(self.columns)).difference(set(self.basic_columns))
             )
         if len(target_columns) < 1 :
             return pd.DataFrame(columns = self.basic_columns)
         
-        target_columns = self.basic_columns + target_columns
+        target_columns = list(set(self.basic_columns + target_columns))
         
         data_sets = tejapi.fastget(
             table,
@@ -969,11 +969,13 @@ class TradingData(ToolApiMeta):
 
     def fetch_data(self , table , tickers) -> pd.DataFrame :
         target_columns = list(
-            set(self.get_available_columns_by_table(table)).intersection(set(self.columns))
+            set(self.get_available_columns_by_table(table)).intersection(set(self.columns)).difference(set(self.basic_columns)).difference(set(self.basic_columns))
             )
         if (len(target_columns) < 1) :
             return pd.DataFrame(columns = self.basic_columns)
-        target_columns = target_columns + self.basic_columns
+        
+        target_columns = list(set(target_columns + self.basic_columns))
+        
         data_sets = tejapi.fastget(
             table,
             coid=tickers,
@@ -1112,12 +1114,12 @@ class AlternativeData(ToolApiMeta):
 
     def fetch_data(self , table , tickers) -> pd.DataFrame :
         target_columns = list(
-            set(self.get_available_columns_by_table(table)).intersection(set(self.columns))
+            set(self.get_available_columns_by_table(table)).intersection(set(self.columns)).difference(set(self.basic_columns))
             )
         if (len(target_columns) < 1) :
             return pd.DataFrame(columns = self.basic_columns) 
         
-        target_columns = self.basic_columns + target_columns
+        target_columns = list(set(self.basic_columns + target_columns))
 
         ann_date = self.get_event_column(table)
         if (ann_date not in target_columns) :
@@ -1148,6 +1150,7 @@ class AlternativeData(ToolApiMeta):
                 del data_sets['diff']
         else :
             # alternative data
+            print(target_columns)
             data_sets = tejapi.fastget(table,
                             coid = tickers,
                             paginate = True,
@@ -1337,11 +1340,11 @@ class FinAuditorData(ToolApiMeta):
         return list(set(self.columns).intersection(set(self.available_columns)))
     def fetch_data(self , table , tickers) -> pd.DataFrame :
         target_columns = list(
-            set(self.get_available_columns_by_table(table)).intersection(set(self.columns))
+            set(self.get_available_columns_by_table(table)).intersection(set(self.columns)).difference(set(self.basic_columns))
             )
         if (len(target_columns) < 1) :
             return pd.DataFrame(columns = self.basic_columns)
-        target_columns = self.basic_columns + target_columns
+        target_columns = list(set(self.basic_columns + target_columns))
         data_sets = tejapi.fastget(
             table,
             coid = tickers,
