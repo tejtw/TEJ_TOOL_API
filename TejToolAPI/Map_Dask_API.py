@@ -559,18 +559,9 @@ class ToolApiMeta:
             - pandas 2.x+: 使用 'datetime64[ms]' (毫秒精度)
         """
         datetime_format = ToolApiMeta._get_datetime_format()
-        formats = ['%Y-%m-%d' , '%Y-%m-%d %H:%M:%S.%f' , 'mixed']
         for col in datetime_columns:
             if col in data.columns:
-                # 嘗試多種格式進行轉換
-                for column_format in formats:
-                    # 找到合適的格式後跳出
-                    try :
-                        data[col] = pd.to_datetime(data[col], format = column_format, errors='ignore')
-                        break 
-                    # 無法轉換則嘗試下一個格式
-                    except:
-                        continue
+                data[col] = pd.to_datetime(data[col], format = 'mixed', errors='ignore')
                 data[col] = data[col].astype(datetime_format)
         
         return data
