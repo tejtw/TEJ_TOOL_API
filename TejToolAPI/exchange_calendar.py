@@ -64,7 +64,17 @@ class ExchangeCalendar:
         else :
             calendar['zdate'] = calendar['zdate'].astype('datetime64[ns]')
         return calendar
-
+    
+    def _get_date_value(self, date):
+        """統一的日期值獲取方法，處理不同 pandas 版本的精度差異"""
+        date = pd.Timestamp(date)
+        if pandas_main_version != '1':
+            # pandas 2.x: 轉換為毫秒精度以匹配 self.date_int
+            return date.value // 1_000_000
+        else:
+            # pandas 1.x: 直接使用奈秒精度
+            return date.value
+        
     def is_session(self, date):
         """ 
         Check if the date is valid for trading.
@@ -79,7 +89,7 @@ class ExchangeCalendar:
             utc = True    
 
         return pd.to_datetime(date, utc=utc) in self.calendar_list
-
+    
     def next_open(self, date):
         """
         To make join process efficient,
@@ -87,11 +97,15 @@ class ExchangeCalendar:
         ----------------------------------------------------------
         output: next trading date
         """
+        
+        date_value = self._get_date_value(date)
 
-        date = pd.Timestamp(date)
-        idx = next_divider_idx(self.date_int, date.value)
-
-        return pd.Timestamp(self.date_int[idx])
+        idx = next_divider_idx(self.date_int, date_value)
+        if pandas_main_version != '1':
+            return pd.Timestamp(self.date_int[idx] , unit = 'ms')
+        else:
+            return pd.Timestamp(self.date_int[idx] , unit = 'ns')
+        
     
     def prev_open(self, date):
         """
@@ -100,11 +114,15 @@ class ExchangeCalendar:
         ----------------------------------------------------------
         output: next trading date
         """
+        
+        date_value = self._get_date_value(date)
 
-        date = pd.Timestamp(date)
-        idx = previous_divider_idx(self.date_int, date.value)
+        idx = previous_divider_idx(self.date_int, date_value)
 
-        return pd.Timestamp(self.date_int[idx])
+        if pandas_main_version != '1':
+            return pd.Timestamp(self.date_int[idx] , unit = 'ms')
+        else:
+            return pd.Timestamp(self.date_int[idx] , unit = 'ns')
     
     def annd_adjusted(self, date, shift_backward=True):
         if self.is_session(date):
@@ -128,13 +146,11 @@ def next_divider_idx(dividers: np.ndarray, minute_val: int) -> int:
         return divider_idx
 
 def previous_divider_idx(dividers: np.ndarray, minute_val: int) -> int:
-
+    
     divider_idx = np.searchsorted(dividers, minute_val)
 
     if divider_idx == 0:
-        # print(dividers)
-        # print(dividers[divider_idx])
+
         raise ValueError("Cannot go earlier in calendar!")
-        # return divider_idx
 
     return divider_idx - 1

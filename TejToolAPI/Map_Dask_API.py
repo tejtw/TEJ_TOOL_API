@@ -44,6 +44,7 @@ meta_type = Meta_Types.all_meta
 # 忽略不重要的警告訊息
 warnings.filterwarnings('ignore')
 
+
 class ToolApiMeta:
     """
     TEJ API 資料處理的基礎抽象類別
@@ -266,7 +267,8 @@ class ToolApiMeta:
             data = self.compute_multi_fetch(table)
             
             # 檢查是否有實際資料（避免空 DataFrame 佔用記憶體）
-            if (data.size.compute() > 0):                
+
+            if (data.compute().size > 0):                
                 data_sets[table] = data
                 
             # 主動釋放記憶體
@@ -383,6 +385,97 @@ class ToolApiMeta:
         return data
     
     @staticmethod
+    def switch_date(date):
+        """
+        如果是在下午 1 點半之後(收盤後公布的)，則回傳當天日期，否則回傳前一天日期。
+        """
+        if date.hour > 13 or (date.hour == 13 and date.minute >= 30):
+            date = date.date() 
+        else :
+            date = date.date() - pd.Timedelta(days=1)
+        return date
+    
+    @staticmethod
+    def getMRAnnd_np_new(data):
+        """
+        獲取最新版本的財務公告資料 (Most Recent Announcement)
+        
+        這是處理財務資料版本控制的核心方法。由於財務報表可能會有修正版本，
+        此方法確保取得每個報告期間的最新正確版本。
+        
+        Args:
+            data (pd.DataFrame): 包含版本資訊的原始財務資料
+                必要欄位：['coid', 'key3', 'mdate', 'no']
+                - coid: 公司代碼
+                - no: 財務頻率 (Q/A/TTM)
+                - mdate: 報告期間（財報日）
+                - key3: 公告日期（公告時間）
+                
+        Returns:
+            pd.DataFrame: 處理後的最新版本資料
+            
+        Algorithm:
+            1. 按公司代碼、財務頻率、公告時間排序
+            2. 確保財報日期在時間軸上遞增，濾掉不符合的記錄
+            3. 統一日期時間格式
+            
+        Business Logic:
+            - 以公告時間（key3）為主要順序
+            - 如果前一筆的財報日期（mdate）< 後一筆的財報日期，濾掉前一筆
+            - 確保財報日期的時間邏輯一致性
+            
+        Example:
+            原始資料：
+            | coid | key3       | mdate      | no |
+            |------|------------|------------|-----|
+            | 2330 | 2023-04-15 | 2023-03-31 | Q   |
+            | 2330 | 2023-07-10 | 2023-03-31 | Q   | <- 財報日期倒退，會被濾掉
+            | 2330 | 2023-10-15 | 2023-09-30 | Q   |
+            
+            處理後：
+            | coid | key3       | mdate      | no |
+            |------|------------|------------|-----|
+            | 2330 | 2023-04-15 | 2023-03-31 | Q   |
+            | 2330 | 2023-10-15 | 2023-09-30 | Q   |
+        """
+        # 步驟 1: 按公司代碼、財務頻率、公告時間排序
+        data = data.sort_values(by=['coid', 'no', 'key3']).reset_index(drop=True)
+        
+        # 步驟 2: 確保財報日期（mdate）在時間軸上遞增
+        def filter_mdate_progression(group):
+            """
+            針對每個公司的每個財務頻率，確保 mdate 遞增
+            如果前一筆的 mdate < 後一筆的 mdate，濾掉前一筆
+            """
+            # 按 key3（公告時間）排序
+            group = group.sort_values('key3')
+            
+            # 計算 mdate 的累積最大值
+            group['mdate_cummax'] = group['mdate'].cummax()
+            
+            # 只保留 mdate 等於累積最大值的記錄（確保遞增）
+            group = group[group['mdate'] == group['mdate_cummax']]
+            
+            # 移除輔助欄位
+            group = group.drop(columns=['mdate_cummax'])
+            
+            return group
+        
+        # 按公司代碼和財務頻率分組處理
+        data = data.groupby(
+            ['coid', 'no'],
+            group_keys=False
+        ).apply(filter_mdate_progression)
+        
+        # 重置索引
+        data = data.reset_index(drop=True)
+        
+        # 步驟 3: 統一日期時間格式（相容不同 pandas 版本）
+        data = ToolApiMeta._standardize_datetime_columns(data, ['mdate'])
+        
+        return data
+
+    @staticmethod
     def parallelize_ver_process(data):
         """
         並行處理版本字串拆解
@@ -466,9 +559,9 @@ class ToolApiMeta:
             - pandas 2.x+: 使用 'datetime64[ms]' (毫秒精度)
         """
         datetime_format = ToolApiMeta._get_datetime_format()
-        
         for col in datetime_columns:
             if col in data.columns:
+                data[col] = pd.to_datetime(data[col], format = 'mixed', errors='ignore')
                 data[col] = data[col].astype(datetime_format)
         
         return data
@@ -558,7 +651,79 @@ class ToolApiMeta:
             result_data = result_data.merge(temp_data, on=remain_keys, how='outer')
         
         return result_data
+    
+    @staticmethod
+    def fin_pivot_new(df, remain_keys):
+        """
+        財務頻率資料透視轉換
+        
+        將縱向的財務頻率資料轉換為橫向的多欄位格式，便於後續分析。
+        這是財務資料處理的核心功能之一。
+        
+        Args:
+            df (pd.DataFrame): 包含 no (財務頻率) 欄位的資料
+            remain_keys (list): 需要保持不變的識別欄位
+                通常包含：['coid', 'mdate', 'annd', 'no']
+                
+        Returns:
+            pd.DataFrame: 透視後的寬格式資料
+            
+        Transformation Logic:
+            原始格式 (長格式):
+            | coid | mdate    | eps | no |
+            |------|----------|-----|------|
+            | 2330 | 2023-Q1  | 5.0 | Q    |
+            | 2330 | 2023-Q1  | 6.2 | A    |
+            
+            結果格式 (寬格式):  
+            | coid | mdate    | eps_Q | eps_A |
+            |------|----------|-------|-------|
+            | 2330 | 2023-Q1  | 5.0   | 6.2   |
+            
+        Business Value:
+            - 季報 (Q) 和年報 (A) 資料可以在同一行比較
+            - 便於計算同比和環比成長率
+            - 簡化後續的資料分析和建模
+            
+        Performance:
+            - 使用逐步合併避免大型資料的記憶體問題
+            - 支援任意數量的財務頻率
+            
+        Example:
+            >>> # 原始 EPS 資料包含季報和年報
+            >>> raw_data = pd.DataFrame({
+            ...     'coid': ['2330', '2330'],
+            ...     'mdate': ['2023-03-31', '2023-03-31'],
+            ...     'eps': [5.0, 20.5],
+            ...     'no': ['Q', 'A']
+            ... })
+            >>> remain_keys = ['coid', 'mdate']
+            >>> result = ToolApiMeta.fin_pivot_new(raw_data, remain_keys)
+            >>> # 結果: eps_Q=5.0, eps_A=20.5 在同一行
+        """
+        # 取得所有唯一的財務頻率
+        unique_frequencies = df['no'].dropna().unique()
 
+        # 如果沒有頻率資料，直接回傳原始資料
+        if len(unique_frequencies) == 0:
+            return df
+        
+        # 處理第一個頻率作為基礎
+        result_data = ToolApiMeta._pivot_single_frequency_new(
+            df, remain_keys, unique_frequencies[0]
+        )
+        
+        # 逐一合併其他頻率的資料
+        for frequency in unique_frequencies[1:]:
+            temp_data = ToolApiMeta._pivot_single_frequency_new(
+                df, remain_keys, frequency
+            )
+            
+            # 使用外連接確保所有資料都被保留
+            result_data = result_data.merge(temp_data, on=remain_keys, how='outer')
+        
+        return result_data
+    
     @staticmethod
     def _pivot_single_frequency(df, remain_keys, frequency):
         """
@@ -576,7 +741,25 @@ class ToolApiMeta:
             這是 fin_pivot 的輔助方法，負責處理單一頻率的轉換邏輯
         """
         return ToolApiMeta.pivot(df, remain_keys, frequency)
-
+    
+    @staticmethod
+    def _pivot_single_frequency_new(df, remain_keys, frequency):
+        """
+        處理單一財務頻率的透視操作
+        
+        Args:
+            df (pd.DataFrame): 原始資料
+            remain_keys (list): 保持欄位清單
+            frequency (str): 特定頻率 (如 'Q', 'A', 'TTM')
+            
+        Returns:
+            pd.DataFrame: 該頻率的透視結果
+            
+        Note:
+            這是 fin_pivot 的輔助方法，負責處理單一頻率的轉換邏輯
+        """
+        return ToolApiMeta.pivot_new(df, remain_keys, frequency)
+    
     @staticmethod
     def annd_adjusted(exchange_calendar, date, shift_backward=True):
         """
@@ -620,6 +803,7 @@ class ToolApiMeta:
         """
         # 獲取所有唯一的公告日期
         unique_announce_dates = pd.to_datetime(data[annd].dropna().unique())
+        
         
         # 建立向量化的日期調整函數
         vectorized_date_adjuster = np.vectorize(ToolApiMeta.annd_adjusted)
@@ -705,6 +889,22 @@ class ToolApiMeta:
             # Replace old names with the new ones.
             data = data.rename(columns = new_keys)
             data = data.loc[:,~data.columns.str.contains('key3')]
+        
+        except:
+            raise ValueError('請使用 get_announce_date 檢查該檔股票的財務數據發布日是否為空值。')
+        
+        return data
+    
+    @staticmethod
+    def pivot_new(df, remain_keys, pattern):
+        try:
+            data = df.loc[df['no']==pattern, :]
+            # Create a mapping table of column names and their corresponding new names.
+            new_keys = {i:i+'_'+str(pattern) for i in data.columns.difference(remain_keys)}
+            
+            # Replace old names with the new ones.
+            data = data.rename(columns = new_keys)
+            data = data.loc[:,~data.columns.str.contains('no')]
         
         except:
             raise ValueError('請使用 get_announce_date 檢查該檔股票的財務數據發布日是否為空值。')
@@ -881,7 +1081,7 @@ class FinSelfAccData(ToolApiMeta):
             tickers=self.tickers,
             npartitions=self._npartitions
         )
-
+        
         # 步驟 2: 建立並行處理任務
         # 將股票列表分割並為每個子集建立獨立的處理任務
         multi_subsets = [
@@ -894,11 +1094,15 @@ class FinSelfAccData(ToolApiMeta):
             )
             for i in range(1, ticker_partitions)  # 從分區1開始處理
         ]
-
+        ddf = self.fetch_data(
+            table = table , 
+            tickers=self.tickers[0]
+        )
+        dtypes = { key : meta_type[key] for key in ddf.columns }
         # 步驟 3: 合併所有並行任務的結果
         # 將分散的任務結果組合成單一的 Dask DataFrame
-        data_sets = dd.from_delayed(multi_subsets)
-
+        data_sets = dd.from_delayed(multi_subsets , meta = dtypes , verify_meta = False)
+        
         # 步驟 4: 條件性去重處理
         if self._extend_fg == "N":          
             data_sets = data_sets.drop_duplicates(
@@ -1036,10 +1240,14 @@ class TradingData(ToolApiMeta):
             )
             for i in range(1, ticker_partitions)  # 從分區1開始處理
         ]
-        
+        ddf = self.fetch_data(
+            table = table , 
+            tickers=self.tickers[0]
+        )
+        dtypes = { key : meta_type[key] for key in ddf.columns }
         # 步驟 3: 合併所有並行任務的結果
         # 將分散的任務結果組合成單一的 Dask DataFrame
-        data_sets = dd.from_delayed(multi_subsets)
+        data_sets = dd.from_delayed(multi_subsets, meta=dtypes , verify_meta = False)
 
         # 步驟 4: 條件性去重處理
         if self._extend_fg == "N":          
@@ -1147,7 +1355,9 @@ class AlternativeData(ToolApiMeta):
                 data_sets = data_sets.loc[data_sets['diff'] >= pd.Timedelta(0)]
                 dfgb = data_sets.groupby(['coid'])
             if 'diff' in data_sets.columns :
-                del data_sets['diff']
+                data_sets = data_sets.drop(columns = ['diff'])
+            if 'key3' not in target_columns :
+                data_sets = data_sets.drop(columns = ['key3'])
         else :
             # alternative data
             
@@ -1196,7 +1406,7 @@ class AlternativeData(ToolApiMeta):
         data_sets = data_sets[alt_dfs.columns]
         
         if not isinstance(data_sets , pd.DataFrame) :
-            data_sets = data_sets.compute(meta = meta_type)
+            data_sets = data_sets.compute()
         
         return data_sets
     
@@ -1236,7 +1446,13 @@ class AlternativeData(ToolApiMeta):
 
         # 步驟 3: 合併所有並行任務的結果
         # 將分散的任務結果組合成單一的 Dask DataFrame
-        data_sets = dd.from_delayed(multi_subsets)
+        ddf = self.fetch_data(
+            table = table , 
+            tickers=self.tickers[0]
+        )
+        dtypes = { key : meta_type[key] for key in ddf.columns }
+
+        data_sets = dd.from_delayed(multi_subsets, meta=dtypes , verify_meta = False)
         # 步驟 4: 條件性去重處理
         if self._extend_fg == "N" and self.get_repo_column(table) in data_sets.columns :
             data_sets = data_sets.drop_duplicates(
@@ -1332,10 +1548,10 @@ class FinAuditorData(ToolApiMeta):
         return "A0004"
     @property
     def excluded_freq_columns(self):
-        return ['coid', 'mdate', 'key3', 'annd', 'no', 'sem', 'merg', 'curr', 'fin_ind']
+        return ['coid', 'mdate', 'key3', 'no', 'sem' , 'annd', 'curr', 'merg', 'ind_c', 'ind_e' ]
     @property
     def basic_columns(self):
-        return ['coid', 'mdate', 'key3', 'annd', 'no', 'sem', 'merg', 'curr', 'fin_ind']
+        return ['coid', 'mdate', 'key3', 'no', 'sem', 'curr', 'merg', 'ind_c', 'ind_e' ]
     def columns(self):
         return list(set(self.columns).intersection(set(self.available_columns)))
     def fetch_data(self , table , tickers) -> pd.DataFrame :
@@ -1343,17 +1559,19 @@ class FinAuditorData(ToolApiMeta):
             set(self.get_available_columns_by_table(table)).intersection(set(self.columns)).difference(set(self.basic_columns))
             )
         if (len(target_columns) < 1) :
-            return pd.DataFrame(columns = self.basic_columns)
+            return pd.DataFrame(columns = self.basic_columns + ['annd'])
         target_columns = list(set(self.basic_columns + target_columns))
+        
         data_sets = tejapi.fastget(
             table,
             coid = tickers,
-            key3 = self._freq, 
+            no = self._freq, 
             paginate = True,
             chinese_column_name=False,
             mdate = {'gte':self._start,'lte':self._end},
             opts= {'columns': target_columns}
         )
+        
         new_columns = []
         # 設計頻率規格
         for column in target_columns :
@@ -1362,8 +1580,9 @@ class FinAuditorData(ToolApiMeta):
             else:
                 for fq in self._freq:
                     new_columns.append(column+'_'+fq)
-
+        
         lower_new_columns = {i:i.lower() for i in new_columns}
+        
         fix_col_dict = {i:pd.Series(dtype=meta_type[i]) for i in lower_new_columns}
         fix_col_df = pd.DataFrame(fix_col_dict)
         
@@ -1375,10 +1594,11 @@ class FinAuditorData(ToolApiMeta):
         data_sets = data_sets.rename(columns=lower_columns)
         
         # get most recent announce date of the company
-        temp = data_sets[['coid', 'key3','annd', 'mdate', 'no']].copy()
-        fin_date = self.getMRAnnd_np(temp)
-        data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3','annd', 'mdate', 'no'])
+        temp = data_sets[['coid', 'key3', 'mdate', 'no']].copy()
+        fin_date = self.getMRAnnd_np_new(temp)
 
+        data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3', 'mdate', 'no'])
+        
         
         # Select columns
         try:
@@ -1392,20 +1612,27 @@ class FinAuditorData(ToolApiMeta):
             
             # Select columns again
             data_sets = data_sets.loc[:,selected_columns]
-
+        
+        data_sets['annd'] = data_sets['key3'].copy()
+        data_sets = ToolApiMeta._standardize_datetime_columns(data_sets, ['annd'])
+        data_sets['annd'] = data_sets['annd'].apply(ToolApiMeta.switch_date)
+        data_sets = ToolApiMeta._standardize_datetime_columns(data_sets, ['annd'])
+        data_sets = data_sets.drop_duplicates(subset=['coid', 'annd', 'no'], keep='last')
+        data_sets.reset_index(drop=True, inplace=True)
         # Parallel fin_type (key3) to columns
         fin_keys = self.excluded_freq_columns.copy()
-        fin_keys.remove('key3')
-        # keys = [i for i in target_columns if i in fin_keys]
-        data_sets = self.fin_pivot(data_sets, remain_keys=fin_keys)
-        fix_col_df.drop(columns = 'key3' , inplace = True)
-
-
+        fin_keys.remove('no')
+        
+        data_sets = self.fin_pivot_new(data_sets, remain_keys=fin_keys)
+        
+        
+        fix_col_df.drop(columns = 'no' , inplace = True)
+        fix_col_dict.pop('no' , None)
         # Ensure there is no difference between data_sets and alt_dfs.
         col_diff = set(data_sets.columns).difference(set(fix_col_df.columns))
-
+        
         # If difference occurred, update alt_dfs.
-        if len(col_diff)>0:
+        if len(col_diff) > 0 :
             fix_col_dict.update({i:data_sets[i].dtypes.name for i in list(col_diff)})
             fix_col_df = pd.DataFrame(fix_col_dict)
 
@@ -1413,8 +1640,8 @@ class FinAuditorData(ToolApiMeta):
         data_sets = data_sets[fix_col_df.columns]
         
         data_sets = self.parallize_annd_process(data_sets)
-        
-        return data_sets    
+
+        return data_sets
     
     def compute_multi_fetch(self , table):
         """
@@ -1436,7 +1663,7 @@ class FinAuditorData(ToolApiMeta):
             tickers=self.tickers,
             npartitions=self._npartitions
         )
-
+        
         # 步驟 2: 建立並行處理任務
         # 將股票列表分割並為每個子集建立獨立的處理任務
         multi_subsets = [
@@ -1449,18 +1676,25 @@ class FinAuditorData(ToolApiMeta):
             )
             for i in range(1, ticker_partitions)  # 從分區1開始處理
         ]
-
+        
         # 步驟 3: 合併所有並行任務的結果
         # 將分散的任務結果組合成單一的 Dask DataFrame
-        data_sets = dd.from_delayed(multi_subsets)
+        ddf = self.fetch_data(
+            table = table , 
+            tickers=self.tickers[0]
+        )
+        
+        dtypes = { key : meta_type[key] for key in ddf.columns }
 
+        data_sets = dd.from_delayed(multi_subsets , meta = dtypes , verify_meta = False )
+        
         # 步驟 4: 條件性去重處理
         if self._extend_fg == "N":          
             data_sets = data_sets.drop_duplicates(
                 subset=['coid','annd'],    # 依據：公司代碼 + 公告日期
                 keep='last'                 # 策略：保留最新記錄
             )
-        
+
         # 步驟 5: 優化分區配置
         # 確保有足夠的分區數以達到最佳並行處理效能
         if data_sets.npartitions < self._npartitions:

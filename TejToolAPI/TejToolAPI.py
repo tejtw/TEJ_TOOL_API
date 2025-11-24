@@ -6,12 +6,10 @@ import gc
 from . import parameters as para
 from .Map_Dask_API import ToolApiMeta , FinSelfAccData , TradingData , AlternativeData , FinAuditorData
 from .utils import get_api_key_info 
-from .meta_types import Meta_Types 
 import re
 
-global pandas_main_version , all_meta
+global pandas_main_version
 pandas_main_version = pd.__version__.split('.')[0]
-all_meta = Meta_Types.all_meta
 dask.config.set({'dataframe.convert-string': False})
 
 def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','TTM'], include_self_acc:str = 'N', **kwargs):
@@ -50,6 +48,14 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     org_start = start_dt.strftime('%Y-%m-%d')
     shift_start = shift_start.strftime('%Y-%m-%d')
 
+    if isinstance(ticker, str) :
+        ticker = [ticker]
+
+    if isinstance(columns , str) :
+        columns = [columns]
+    
+    if isinstance(fin_type , str) :
+        fin_type = [fin_type]
 
     columns = get_internal_code(columns)
 
@@ -107,7 +113,7 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
                              npartitions=npartitions,
                              )
     
-    data = data.compute(meta = all_meta)
+    data = data.compute()
     
     # # Drop redundant columns of the merged table.
     if require_annd:
@@ -151,13 +157,13 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     # merge back evnet-type data, which does not need ffill.
     data = dd.merge(data, event_data, on= column_prefix , how = 'left')
 
-    data = data.compute(meta = all_meta )
+    data = data.compute()
 
     # Drop suspend trading day
     coid_calendar = get_stock_calendar(tickers = ticker, start = org_start , end = end , npartitions = npartitions).compute()
     
     data = dd.merge(coid_calendar, data, on= ['coid','mdate'], how = 'left')
-    data = data.compute(meta = all_meta)
+    data = data.compute()
 
     # Truncate resuly by user-setted start.
     data = data.loc[data.mdate >= pd.Timestamp(org_start),:]
@@ -195,6 +201,7 @@ def process_fin_data(table):
 def transfer_language_columns(columns, isChinese = False):
     def get_col_name(col, isChinese):
         transfer_lang = 'CHN_COLUMN_NAMES' if isChinese else 'ENG_COLUMN_NAMES'
+        
         try:
             col_name = search_columns([col])[transfer_lang].dropna().drop_duplicates(keep='last').item()
         except:
@@ -204,8 +211,8 @@ def transfer_language_columns(columns, isChinese = False):
     
     mapping = {}
     for col in columns:
-        # Remove  _A, _Q, _TTM , \d+
-        if ( re.search('_A$|_Q$|_TTM$|_\d+$' , col) ) :
+        # Remove  _A, _Q, _TTM
+        if ( re.search('_A$|_Q$|_TTM$', col) ) :
             col_stripped = col.split('_')[:-1]
             fin_type = '_' + col.split('_')[-1]
             # If the variables contain '_', then join '_' into the variables.
