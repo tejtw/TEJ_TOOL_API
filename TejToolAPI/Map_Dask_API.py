@@ -1016,7 +1016,13 @@ class FinSelfAccData(ToolApiMeta):
             mdate={'gte': self._start, 'lte': self._end},
             opts={'columns': target_columns}
         )
+        
+        
+        # transform columns name to same code of audit_fin data
+        mapper = dict(zip(para.self_cover['fin_self_acc'] , para.self_cover['fin_auditor']))
+        data_sets.rename(columns = mapper , inplace = True)
         columns = data_sets.columns
+        
         new_columns = []
         # 設計頻率規格
         for column in columns :
@@ -1027,8 +1033,11 @@ class FinSelfAccData(ToolApiMeta):
                     new_columns.append(column+'_'+fq)
         
         # 設計欄位資料型態
+        
         dtype_dict = {i:pd.Series(dtype=meta_type[i]) for i in new_columns}
+        
         dtype_df = pd.DataFrame(dtype_dict)
+        
         # 若無資料，則回傳空的 dataframe
         if len(data_sets) < 1:
             return dtype_df
@@ -1038,15 +1047,17 @@ class FinSelfAccData(ToolApiMeta):
         # 釋放記憶體
         temp = []
         del temp
+        
         # merge 資料回來
         data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3','annd', 'mdate', 'no'])
-
+        
         # 移除key3,變成column pivot
         key = self.excluded_freq_columns.copy()
+        
         key.remove('key3')
         dtype_df.drop(columns = 'key3', inplace = True)
         data_sets = self.fin_pivot(data_sets, remain_keys=key)
-
+        
         # Ensure there is no difference between data_sets and alt_dfs.
         col_diff = set(data_sets.columns).difference(set(dtype_df.columns))
         
@@ -1056,6 +1067,7 @@ class FinSelfAccData(ToolApiMeta):
             dtype_df = pd.DataFrame(dtype_dict)
         
         # Fixed the order of the columns
+        
         data_sets = data_sets[dtype_df.columns]
         data_sets = self.parallize_annd_process(data_sets)
 
@@ -1099,6 +1111,7 @@ class FinSelfAccData(ToolApiMeta):
             tickers=self.tickers[0]
         )
         dtypes = { key : meta_type[key] for key in ddf.columns }
+        
         # 步驟 3: 合併所有並行任務的結果
         # 將分散的任務結果組合成單一的 Dask DataFrame
         data_sets = dd.from_delayed(multi_subsets , meta = dtypes , verify_meta = False)

@@ -43,8 +43,7 @@ map_table = pd.read_excel(xlsx_path,sheet_name='table_od')
 # merge_keys: od, merge_keys
 merge_keys = pd.read_excel(xlsx_path,sheet_name='merge_keys')
 
-
-
+self_cover = pd.read_excel(xlsx_path,sheet_name='self_cover_code')
 
 
 

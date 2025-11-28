@@ -77,7 +77,11 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
             columns = columns,
             freq = fin_type 
             ).run()
-    fin_audit_data_dict = FinAuditorData(
+    
+    if include_self_acc != 'Y' :
+        mapper = dict(zip(para.self_cover['fin_self_acc'] , para.self_cover['fin_auditor'] ))
+        columns = [mapper.get(col , col) for col in columns ]
+        fin_audit_data_dict = FinAuditorData(
             tickers=ticker ,
             start= shift_start ,
             end = end ,
@@ -86,7 +90,23 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
             columns = columns,
             freq = fin_type 
             ).run()
-    if include_self_acc == 'Y' :
+    else :
+        mapper1 = dict(zip(para.self_cover['fin_auditor'] , para.self_cover['fin_self_acc'] ))
+        new_columns1 = [mapper1.get(col , col) for col in columns ]
+        mapper2 = dict(zip(para.self_cover['fin_self_acc'] , para.self_cover['fin_auditor'] ))
+        new_columns2 = [mapper2.get(col , col) for col in columns ]
+        columns = list(set(new_columns1 + new_columns2))
+        
+        fin_audit_data_dict = FinAuditorData(
+                tickers=ticker ,
+                start= shift_start ,
+                end = end ,
+                extend_fg = 'N' ,
+                npartitions=npartitions , 
+                columns = columns,
+                freq = fin_type 
+                ).run()
+        
         fin_self_acc_data_dict = FinSelfAccData(
             tickers=ticker ,
             start= shift_start ,
@@ -96,8 +116,13 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
             columns = columns,
             freq = fin_type 
             ).run()
-        fin_audit_data_dict.update(fin_self_acc_data_dict)
+        
+        new_data = dd.concat([list(fin_audit_data_dict.values())[0] , list(fin_self_acc_data_dict.values())[0]])
+        
+        fin_audit_data_dict = { list(fin_audit_data_dict.keys())[0] : new_data  }
+
     
+
     for key , value in fin_audit_data_dict.items() :
         fin_audit_data_dict[key] = process_fin_data(value)
 
@@ -281,6 +306,7 @@ def get_internal_code(fields:list):
 
 def consecutive_merge(tables , **kwargs) :
     used_api_tables = [key for key in tables.keys()]
+    
     full_para_table = para.fin_invest_tables.merge(para.map_table , on = 'TABLE_NAMES' , how = 'left')
     full_para_table = full_para_table.merge(para.merge_keys , on = 'OD' , how = 'left')
     
@@ -293,11 +319,13 @@ def consecutive_merge(tables , **kwargs) :
         right_merge_key = full_para_table.loc[full_para_table['API_TABLE']==api_table , 'KEYS'].tolist()
         
         trading_calendar = dd.merge(trading_calendar, tables[api_table], left_on = ['coid', 'mdate'], right_on = right_merge_key, how = 'left', suffixes = ('','_surfeit'))
+        
         trading_calendar = trading_calendar.iloc[:,~trading_calendar.columns.str.contains('_surfeit')]
         
     
     return trading_calendar
 
+       
 def get_trading_calendar(tickers, **kwargs):
     # Setting default value of the corresponding parameters.
     start = kwargs.get('start', para.default_start)
