@@ -559,9 +559,9 @@ class ToolApiMeta:
             - pandas 2.x+: 使用 'datetime64[ms]' (毫秒精度)
         """
         datetime_format = ToolApiMeta._get_datetime_format()
-        
         for col in datetime_columns:
             if col in data.columns:
+                data[col] = pd.to_datetime(data[col], format = 'mixed', errors='ignore')
                 data[col] = data[col].astype(datetime_format)
         
         return data

@@ -39,7 +39,7 @@ Tool API 可獲取 PIT 資料庫的所有欄位，共計超過 600 個指標，�
 | transfer_to_chinese | Optional | boolean | 欄位轉換成中文，若 transfer_to_chinese=True，則欄位顯示為中文名稱，transfer_to_chinese=False，則欄位顯示為英文名稱。(預設為 False)|
 | fin_type   | Optional    | list      | 會計科目類型 -> 單季:Q、累計:A、移動四季:TTM，ex: 撈取單季和累積，fin_type=['Q','A']。(預設為 ['Q','A','TTM']) |
 | include_self_acc | Optional | string | 財務是否包含公司自結損益，include_self_acc='Y'，表示財務資料包含自結損益，否則僅有財簽資料 (預設為 'N') |
-| npartitions | Optional    | int       | 多核心執行，可以指定執行所要使用的核心數量，ex: npartitions=6，代表使用6個核心來運行程式 (預設為當前 CPU 可使用之核心數) |
+| npartitions | Optional    | int       | 代表取得資料時已n家公司為一組單位，ex: 取得100家資料時設定 npartitions = 50 ,則會分成 ceil(100/50) = 2 次 分別抓取後再合併 |
 
 
 ### get_internal_code  <br>
