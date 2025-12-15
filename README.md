@@ -1,4 +1,4 @@
-## 使用 Tool API 獲取數據(股價、財務、月營收、集保和股票屬性)
+## 使用 Tool API 獲取數據
 ### 安裝套件
 ```python
 pip install tej-tool-api
