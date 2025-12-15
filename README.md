@@ -18,7 +18,7 @@ list_of_Stocks = ['2330','2303','2454', '2882', '2881']
 # 撈取歷史資料
 data = TejToolAPI.get_history_data(
 ticker=list_of_Stocks,
-columns= ['稅前淨利成長率', '單月營收成長率％'], 
+columns= ['稅前淨利成長率', '單月營收成長率'], 
 transfer_to_chinese=False
 )
 ```
