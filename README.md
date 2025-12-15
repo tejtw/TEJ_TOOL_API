@@ -23,7 +23,7 @@ transfer_to_chinese=False
 )
 ```
 目前資料庫僅支援台灣市場。<br>
-Tool API 可獲取 PIT 資料庫的所有欄位，共計超過 600 個指標，具體指標內容參考[TEJAPI_量化投資資料庫]([https://api.tej.com.tw/datatables.html?db=TWN&t=%E5%8F%B0%E7%81%A3%E8%B3%87%E6%96%99%E5%BA%AB#G%E9%87%8F%E5%8C%96%E6%8A%95%E8%B3%87](https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Ftquant.tejwin.com%2Fwp-content%2Fuploads%2FTEJ-TOOL-API%25E6%25AC%2584%25E4%25BD%258D%25E5%25B0%258D%25E7%2585%25A7%25E6%25B8%2585%25E5%2596%25AE20251126.xlsx&wdOrigin=BROWSELINK)) 。<br>
+Tool API 可獲取 PIT 資料庫的所有欄位，共計超過 600 個指標，具體指標內容參考[TEJAPI_量化投資資料庫](https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Ftquant.tejwin.com%2Fwp-content%2Fuploads%2FTEJ-TOOL-API%25E6%25AC%2584%25E4%25BD%258D%25E5%25B0%258D%25E7%2585%25A7%25E6%25B8%2585%25E5%2596%25AE20251126.xlsx&wdOrigin=BROWSELINK) 。<br>
 財務數據是根據發布日（announcement date）來mapping，非發布日的財務數據會使用當下可獲得最新的資料為準進行填值。ex: 2330 在 2010-02-01 時所能獲得最新的財務資料為 2009Q3 的財務資料，則 2010-01-01 會以 2009Q3 的資料進行填補。惟公司2009Q4自結財報早於 2010-02-01 發布時，且 include_self_acc = 'Y'，這時 2010-02-01 的財務數據使用自結財務數據。<br>
 <br>
 
@@ -33,7 +33,7 @@ Tool API 可獲取 PIT 資料庫的所有欄位，共計超過 600 個指標，�
 | Parameters | Is Required | Data Type | Descriptions |
 |------------|-------------|-----------|--------------|
 | ticker     | Required    | list      | 股票代碼，ex: ['2330', '2881', '2882'] |
-| columns    | Required    | list      | 欄位代碼，可參考[TEJAPI_量化投資資料庫](https://api.tej.com.tw/datatables.html?db=TWN&t=%E5%8F%B0%E7%81%A3%E8%B3%87%E6%96%99%E5%BA%AB#G%E9%87%8F%E5%8C%96%E6%8A%95%E8%B3%87) |
+| columns    | Required    | list      | 欄位代碼，可參考[TEJAPI_量化投資資料庫](https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Ftquant.tejwin.com%2Fwp-content%2Fuploads%2FTEJ-TOOL-API%25E6%25AC%2584%25E4%25BD%258D%25E5%25B0%258D%25E7%2585%25A7%25E6%25B8%2585%25E5%2596%25AE20251126.xlsx&wdOrigin=BROWSELINK) |
 | start      | Optional    | date/str  | 起始日，ex: '2008-01-01' (預設值為 '2013-01-01')，目前版本尚未支援timezone的設定 |
 | end        | Optional    | date/str  | 結束日，ex: '2008-01-01' (預設值為今日 datetime.now())，目前版本尚未支援timezone的設定|
 | transfer_to_chinese | Optional | boolean | 欄位轉換成中文，若 transfer_to_chinese=True，則欄位顯示為中文名稱，transfer_to_chinese=False，則欄位顯示為英文名稱。(預設為 False)|
