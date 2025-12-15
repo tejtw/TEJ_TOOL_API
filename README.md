@@ -50,7 +50,7 @@ TejToolAPI.get_internal_code(['稅前淨利成長率', 'Gross_Profit_Loss_from_O
 
 ```
 ```html
-output: ['r404', 'gm']
+output: ['r404', 'gm', 'a3295']
 ```
 <br>
 
