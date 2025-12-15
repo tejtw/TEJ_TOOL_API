@@ -58,7 +58,7 @@ output: ['r404', 'gm']
 
 | Parameters | Is Required | Data Type | Descriptions |
 |------------|-------------|-----------|--------------|
-| columns    | Required    | list      | 欄位代碼，可參考[TEJAPI_量化投資資料庫](https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Ftquant.tejwin.com%2Fwp-content%2Fuploads%2FTEJ-TOOL-API%25E6%25AC%2584%25E4%25BD%258D%25E5%25B0%258D%25E7%2585%25A7%25E6%25B8%2585%25E5%2596%25AE20251126.xlsx&wdOrigin=BROWSELINK) |
+| columns    | Required    | list      | 欄位（可以輸入"欄位代號"、"中文名稱"或"英文欄位"），可參考[TEJAPI_量化投資資料庫](https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Ftquant.tejwin.com%2Fwp-content%2Fuploads%2FTEJ-TOOL-API%25E6%25AC%2584%25E4%25BD%258D%25E5%25B0%258D%25E7%2585%25A7%25E6%25B8%2585%25E5%2596%25AE20251126.xlsx&wdOrigin=BROWSELINK) |
 
 
 ### search_columns <br>
