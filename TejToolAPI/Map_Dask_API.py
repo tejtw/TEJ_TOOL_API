@@ -1702,7 +1702,7 @@ class FinAuditorData(ToolApiMeta):
         data_sets = dd.from_delayed(multi_subsets , meta = dtypes , verify_meta = False )
         
         # 步驟 4: 條件性去重處理
-        if self._extend_fg == "N":          
+        if self._extend_fg == "N" and 'annd' in data_sets.columns :          
             data_sets = data_sets.drop_duplicates(
                 subset=['coid','annd'],    # 依據：公司代碼 + 公告日期
                 keep='last'                 # 策略：保留最新記錄
