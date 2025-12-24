@@ -1572,7 +1572,9 @@ class FinAuditorData(ToolApiMeta):
             set(self.get_available_columns_by_table(table)).intersection(set(self.columns)).difference(set(self.basic_columns))
             )
         if (len(target_columns) < 1) :
-            return pd.DataFrame(columns = self.basic_columns + ['annd'])
+            c = self.basic_columns + ['annd']
+            c.remove('no')
+            return pd.DataFrame(columns = c)
         target_columns = list(set(self.basic_columns + target_columns))
         
         data_sets = tejapi.fastget(
@@ -1600,6 +1602,8 @@ class FinAuditorData(ToolApiMeta):
         fix_col_df = pd.DataFrame(fix_col_dict)
         
         if len(data_sets) < 1:
+            fix_col_df.drop(columns = ['no'], inplace = True)
+            fix_col_df['annd'] = pd.NaT
             return fix_col_df
         
         # modify the name of the columns from upper case to lower case.
@@ -1611,7 +1615,6 @@ class FinAuditorData(ToolApiMeta):
         fin_date = self.getMRAnnd_np_new(temp)
 
         data_sets = fin_date.merge(data_sets, how = 'left', on = ['coid', 'key3', 'mdate', 'no'])
-        
         
         # Select columns
         try:
@@ -1653,7 +1656,7 @@ class FinAuditorData(ToolApiMeta):
         data_sets = data_sets[fix_col_df.columns]
         
         data_sets = self.parallize_annd_process(data_sets)
-
+        
         return data_sets
     
     def compute_multi_fetch(self , table):
@@ -1698,7 +1701,7 @@ class FinAuditorData(ToolApiMeta):
         )
         
         dtypes = { key : meta_type[key] for key in ddf.columns }
-
+        
         data_sets = dd.from_delayed(multi_subsets , meta = dtypes , verify_meta = False )
         
         # 步驟 4: 條件性去重處理

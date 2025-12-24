@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from TejToolAPI.TejToolAPI import get_history_data
 import pandas as pd
 # 添加專案根目錄到 Python 路徑，確保使用本地版本
@@ -114,3 +115,17 @@ def test_fin_self_acc_code_also_Y():
     correct_df = pd.DataFrame(correct_data)
     assert correct_df.compare(data).size == 0
     
+def test_starts_with_not_exists_ticker() :
+    """
+    測試股票代碼不存在時，依舊可以正常取得資料
+    """
+    data = get_history_data(
+    start='2025-12-01',
+    end='2025-12-01',
+    fin_type=['A'],
+    ticker =  ['0015' ,'0050','2330'] ,
+    columns=['a3100'],
+    )
+    correct_data = {'coid': {0: '0050', 1: '2330'}, 'mdate': {0: pd.Timestamp('2025-12-01 00:00:00'), 1: pd.Timestamp('2025-12-01 00:00:00')}, 'Total_Operating_Income_A': {0: np.nan, 1: 2762963851.0}}
+    correct_df = pd.DataFrame(correct_data)
+    assert correct_df.compare(data).size == 0

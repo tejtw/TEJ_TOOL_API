@@ -124,13 +124,15 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
     
 
     for key , value in fin_audit_data_dict.items() :
+        if 'annd' not in value.columns :
+            value = value.assign(annd = pd.NaT)
         fin_audit_data_dict[key] = process_fin_data(value)
 
     all_dict = trading_data_dict.copy()
     all_dict.update(alternative_data_dict)
     all_dict.update(fin_audit_data_dict)
     # Consecutive merge.
-    
+
     data = consecutive_merge(tables= all_dict ,
                              tickers=ticker, 
                              start=shift_start, 
@@ -206,6 +208,10 @@ def process_fin_data(table):
     # transfer to daily basis
     days = para.exc.calendar
     days = days.rename(columns = {'zdate':'all_dates'})
+    if 'annd' not in table.columns :
+        table = table.rename(columns = {'mdate':'fin_date'})
+        table = table.assign(all_dates = pd.NaT)
+        return table
     if (pandas_main_version != '1') :
         table['annd'] = table['annd'].astype('datetime64[ms]')
         table['mdate'] = table['mdate'].astype('datetime64[ms]')
