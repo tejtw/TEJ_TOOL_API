@@ -118,7 +118,9 @@ def get_history_data(ticker:list, columns:list = [], fin_type:list = ['A','Q','T
             ).run()
         
         new_data = dd.concat([list(fin_audit_data_dict.values())[0] , list(fin_self_acc_data_dict.values())[0]])
-        
+        new_data = new_data.sort_values(by=['coid' , 'annd','mdate'])
+        new_data = new_data.groupby(by=['coid' , 'annd' , 'mdate'] , group_keys=False).apply(lambda x : x.ffill())
+        new_data = new_data.drop_duplicates(subset=['coid' , 'annd'] , keep='last')
         fin_audit_data_dict = { list(fin_audit_data_dict.keys())[0] : new_data  }
 
     

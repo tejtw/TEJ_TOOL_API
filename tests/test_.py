@@ -129,3 +129,25 @@ def test_starts_with_not_exists_ticker() :
     correct_data = {'coid': {0: '0050', 1: '2330'}, 'mdate': {0: pd.Timestamp('2025-12-01 00:00:00'), 1: pd.Timestamp('2025-12-01 00:00:00')}, 'Total_Operating_Income_A': {0: np.nan, 1: 2762963851.0}}
     correct_df = pd.DataFrame(correct_data)
     assert correct_df.compare(data).size == 0
+
+def test_include_self_acc_no_duplicates():
+    """
+    測試 include_self_acc 參數傳入無效值時，程式能夠正常處理並拋出適當錯誤訊息
+    """
+    data = get_history_data(
+        ticker=['1101'],
+        columns=['Basic_Earnings_Per_Share'],
+        start='2024-08-11',
+        end='2024-08-14',
+        transfer_to_chinese=False,
+        show_progress=True , 
+        fin_type = ['Q'] ,
+        include_self_acc = 'Y'
+    )
+    correct_data = {'coid': {0: '1101', 1: '1101', 2: '1101'},
+        'mdate': {0: pd.Timestamp('2024-08-12 00:00:00'),
+        1: pd.Timestamp('2024-08-13 00:00:00'),
+        2: pd.Timestamp('2024-08-14 00:00:00')},
+        'Basic_Earnings_Per_Share_Q': {0: 0.26, 1: 0.25, 2: 0.25}}
+    correct_df = pd.DataFrame(correct_data)
+    assert correct_df.compare(data).size == 0
